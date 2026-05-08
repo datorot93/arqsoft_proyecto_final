@@ -1,0 +1,63 @@
+# F2 — ConfigMap con los archivos SQL de bootstrap.
+# CloudNativePG referencia este ConfigMap desde el Cluster CR vía postInitApplicationSQLRefs.
+# Las claves del ConfigMap deben coincidir con las referenciadas en cluster-{pe,mx,co}.yaml.
+# Para regenerar este archivo desde infra/sql/*.sql usa:
+#   kubectl create configmap cdt-bootstrap-sql --from-file=infra/sql/ -n datos --dry-run=client -o yaml > infra/k8s/datos/configmap-bootstrap-sql.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cdt-bootstrap-sql
+  namespace: datos
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: AlmacenCDTXPais
+data:
+  01-init-cdt.sql: |
+    CREATE SCHEMA IF NOT EXISTS cdt;
+    GRANT USAGE ON SCHEMA cdt TO app;
+    GRANT ALL ON SCHEMA cdt TO app;
+    ALTER DEFAULT PRIVILEGES FOR USER app IN SCHEMA cdt GRANT ALL ON TABLES TO app;
+    ALTER DEFAULT PRIVILEGES FOR USER app IN SCHEMA cdt GRANT USAGE, SELECT ON SEQUENCES TO app;
+
+    CREATE TABLE IF NOT EXISTS cdt.cdt (
+        id              UUID         PRIMARY KEY,
+        pais            VARCHAR(2)   NOT NULL CHECK (pais IN ('pe', 'mx', 'co')),
+        cliente_id      VARCHAR(64)  NOT NULL,
+        monto           NUMERIC(15,2) NOT NULL CHECK (monto > 0),
+        plazo_dias      INT          NOT NULL CHECK (plazo_dias > 0),
+        tasa_anual      NUMERIC(5,4) NOT NULL CHECK (tasa_anual >= 0),
+        estado          VARCHAR(20)  NOT NULL DEFAULT 'PENDIENTE'
+                        CHECK (estado IN ('PENDIENTE', 'ACTIVO', 'CONGELADO')),
+        created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cdt_cliente
+        ON cdt.cdt (cliente_id);
+    CREATE INDEX IF NOT EXISTS idx_cdt_estado_created
+        ON cdt.cdt (estado, created_at DESC);
+
+    GRANT SELECT, INSERT, UPDATE ON cdt.cdt TO app;
+
+  02-init-outbox.sql: |
+    CREATE TABLE IF NOT EXISTS cdt.outbox_cdt_eventos (
+        id                BIGSERIAL    PRIMARY KEY,
+        cdt_id            UUID         NOT NULL,
+        aggregate_type    VARCHAR(50)  NOT NULL DEFAULT 'CDT',
+        event_type        VARCHAR(50)  NOT NULL,
+        payload           JSONB        NOT NULL,
+        created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+        published_at      TIMESTAMPTZ,
+        publish_attempts  INT          NOT NULL DEFAULT 0,
+        CONSTRAINT fk_outbox_cdt FOREIGN KEY (cdt_id) REFERENCES cdt.cdt(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_outbox_pending
+        ON cdt.outbox_cdt_eventos (created_at)
+        WHERE published_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_outbox_cdt_id
+        ON cdt.outbox_cdt_eventos (cdt_id);
+
+    GRANT SELECT, INSERT, UPDATE ON cdt.outbox_cdt_eventos TO app;
+    GRANT USAGE, SELECT ON SEQUENCE cdt.outbox_cdt_eventos_id_seq TO app;

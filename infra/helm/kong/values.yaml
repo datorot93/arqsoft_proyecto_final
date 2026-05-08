@@ -1,0 +1,89 @@
+# F2 — Helm values para Kong Gateway 3.7 OSS en modo DB-less.
+# Componente: ApiGateway (Borde) — apoya ASR-2 (rate limiting absorbe ráfagas).
+# Documentación: docs/experimento_asr.md §6.4.5
+
+# Modo DB-less: configuración declarativa via ConfigMap.
+# El chart monta el ConfigMap en /kong_dbless/ y configura KONG_DECLARATIVE_CONFIG
+# automáticamente con la primera key del ConfigMap. NO sobrescribir la ruta aquí.
+env:
+  database: "off"
+  plugins: bundled
+  log_level: notice
+  proxy_access_log: /dev/stdout
+  proxy_error_log: /dev/stderr
+
+deployment:
+  kong:
+    enabled: true
+
+image:
+  repository: kong
+  tag: "3.7"
+
+# Réplicas (HPA opcional en F4 si hace falta)
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Service exposition
+proxy:
+  enabled: true
+  type: ClusterIP
+  http:
+    enabled: true
+    servicePort: 80
+    containerPort: 8000
+  tls:
+    enabled: false
+
+admin:
+  enabled: true
+  type: ClusterIP
+  http:
+    enabled: true
+    servicePort: 8001
+    containerPort: 8001
+  tls:
+    enabled: false
+
+# Manager UI desactivada (control via kubectl + admin API)
+manager:
+  enabled: false
+portal:
+  enabled: false
+portalapi:
+  enabled: false
+
+# Ingress controller desactivado (usamos config declarativa pura)
+ingressController:
+  enabled: false
+
+# Migrations no aplica en DB-less
+migrations:
+  preUpgrade: false
+  postUpgrade: false
+
+# Configuración declarativa montada desde ConfigMap kong-declarative-config
+# (ver infra/k8s/borde/kong-config.yaml)
+dblessConfig:
+  configMap: kong-declarative-config
+
+# ServiceMonitor lo habilita F3 con `helm upgrade` cuando la CRD esté disponible
+serviceMonitor:
+  enabled: false
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8100"
+  prometheus.io/path: "/metrics"
+
+# Etiquetas para F1 ResourceQuota / NetworkPolicy
+podLabels:
+  app.kubernetes.io/part-of: linea-verde-experimento
+  componente: ApiGateway

@@ -46,7 +46,9 @@ metadata:
   labels:
     app.kubernetes.io/part-of: linea-verde-experimento
     subsistema: Asincrono
-    pod-security.kubernetes.io/enforce: baseline
+    # Redpanda requiere privileged para tuning de IO (necesario en OCI también).
+    # En local desactivamos el tuning vía values; el label privileged permite ambos modos.
+    pod-security.kubernetes.io/enforce: privileged
   annotations:
     descripcion: "MessageBroker (Redpanda) + Apicurio Schema Registry"
 

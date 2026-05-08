@@ -1,0 +1,150 @@
+# F2 — NetworkPolicies por país (refinamiento de F1).
+# F1 permitió linea-verde → datos a nivel de namespace. F2 lo refina:
+# cada Postgres SOLO recibe ingreso de pods con el MISMO label `pais`.
+# Esto materializa la promesa multi-país y permite tests F2.T-10/T-11.
+# Documentación: docs/experimento_asr.md §6.4.3 + diagramas_final/clases.jpeg (atributo pais : Pais)
+
+# =================================================================
+# postgres-pe — solo recibe ingreso de pods con pais=pe
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-pe-ingress-from-pe
+  namespace: datos
+spec:
+  podSelector:
+    matchLabels:
+      pais: pe
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Pods en linea-verde con label pais=pe (CDTXPais-PE)
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linea-verde
+          podSelector:
+            matchLabels:
+              pais: pe
+        # CloudNativePG operator y CNPG webhooks
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+        # Observabilidad (scraping)
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observabilidad
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 9187   # exporter de Postgres (Prometheus)
+
+# =================================================================
+# postgres-mx — solo recibe ingreso de pods con pais=mx
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-mx-ingress-from-mx
+  namespace: datos
+spec:
+  podSelector:
+    matchLabels:
+      pais: mx
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linea-verde
+          podSelector:
+            matchLabels:
+              pais: mx
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observabilidad
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 9187
+
+# =================================================================
+# postgres-co — solo recibe ingreso de pods con pais=co
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-co-ingress-from-co
+  namespace: datos
+spec:
+  podSelector:
+    matchLabels:
+      pais: co
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linea-verde
+          podSelector:
+            matchLabels:
+              pais: co
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observabilidad
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 9187
+
+# =================================================================
+# Permitir egreso intra-cluster Postgres (replicación primary↔standby)
+# Los pods Postgres dentro del mismo país pueden hablar entre sí.
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-replication-intra-cluster
+  namespace: datos
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/podRole: instance
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/podRole: instance
+      ports:
+        - protocol: TCP
+          port: 5432
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/podRole: instance
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        # Egreso a kube-system para DNS y a cnpg-system para webhooks
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system

@@ -1,0 +1,65 @@
+# F2 — Helm values para Redpanda 24.2 (chart redpanda 5.9.x).
+# Componente: MessageBroker (Asincrono) — apoya ASR-2 (absorción del pico).
+# Documentación: docs/experimento_asr.md §6.4.4
+
+# Producción usa 3 brokers + RF=3 (configurado abajo).
+# Para corridas locales en cluster de 1 nodo: override con `--set statefulset.replicas=1`.
+
+image:
+  repository: docker.redpanda.com/redpandadata/redpanda
+  tag: v24.2.7
+
+statefulset:
+  replicas: 3
+  podAntiAffinity:
+    type: hard   # 3 brokers en nodos distintos (multi-AD)
+
+resources:
+  cpu:
+    cores: 1
+  memory:
+    container:
+      max: 2Gi   # Redpanda/seastar reserva ~64MB de overhead; 1Gi insuficiente
+
+storage:
+  persistentVolume:
+    enabled: true
+    size: 1Gi
+    storageClass: standard
+
+# Console UI desactivada (operación vía rpk)
+console:
+  enabled: false
+
+# Sin TLS ni SASL en local. Producción habilita ambos vía values-oci.yaml.
+tls:
+  enabled: false
+
+auth:
+  sasl:
+    enabled: false
+
+# Configuración del cluster
+config:
+  cluster:
+    auto_create_topics_enabled: false
+    default_topic_replications: 3
+    log_compression_type: producer
+  tunable:
+    log_segment_size: 16777216
+
+# Rack awareness vía label estándar de Kubernetes
+rackAwareness:
+  enabled: true
+  nodeAnnotation: topology.kubernetes.io/zone
+
+# Monitoring se activa en F3 (cuando kube-prometheus-stack esté instalado)
+monitoring:
+  enabled: false
+
+# Desactivar tuning privilegiado para coexistir con PodSecurity:baseline.
+# En producción OCI con privileged enabled, se reactiva.
+tuning:
+  tune_aio_events: false
+  tune_clocksource: false
+  tune_ballast_file: false

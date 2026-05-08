@@ -1,0 +1,63 @@
+# F2 — Job que crea los tópicos del MessageBroker post-instalación.
+# Tópico cdt.eventos: 6 particiones, RF=3 (alineado a §6.4.4 del documento maestro).
+# Tópico cdt.eventos.DLQ: retención 7 días para auditoría AC-2.4.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redpanda-create-topics
+  namespace: asincrono
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: MessageBroker
+spec:
+  ttlSecondsAfterFinished: 300   # se autoborra 5 min después de éxito
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: redpanda-create-topics
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: rpk
+          image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              echo "==> Esperando a que el cluster Redpanda esté disponible..."
+              until rpk cluster info --brokers redpanda.asincrono.svc.cluster.local:9093 >/dev/null 2>&1; do
+                echo "    cluster aún no disponible, reintentando en 5s..."
+                sleep 5
+              done
+              echo "==> Cluster disponible. Creando tópicos..."
+
+              # Tópico principal: cdt.eventos
+              rpk topic create cdt.eventos \
+                --brokers redpanda.asincrono.svc.cluster.local:9093 \
+                --partitions 6 \
+                --replicas 3 \
+                --topic-config retention.ms=604800000 \
+                --topic-config compression.type=producer \
+                || echo "(tópico cdt.eventos ya existe)"
+
+              # Tópico DLQ: 1 partición es suficiente
+              rpk topic create cdt.eventos.DLQ \
+                --brokers redpanda.asincrono.svc.cluster.local:9093 \
+                --partitions 1 \
+                --replicas 3 \
+                --topic-config retention.ms=604800000 \
+                || echo "(tópico cdt.eventos.DLQ ya existe)"
+
+              echo "==> Verificación final:"
+              rpk topic describe cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9093
+              rpk topic describe cdt.eventos.DLQ --brokers redpanda.asincrono.svc.cluster.local:9093
+              echo "✓ Tópicos creados"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi

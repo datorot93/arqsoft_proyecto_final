@@ -44,6 +44,76 @@ spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
 # observabilidad NO recibe default-deny: necesita scrapear todo el cluster libremente.
 
 # =================================================================
+# ALLOW-INTRA-NAMESPACE — pods del mismo namespace pueden hablar entre sí.
+# Necesario para: replicación Postgres (datos), Apicurio↔Redpanda (asincrono),
+# Kong proxy↔admin (borde), Prometheus↔exporters (observabilidad), etc.
+# Sin esto, default-deny bloquea TODO tráfico, incluyendo intra-pod.
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-intra-namespace, namespace: borde }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: [{ from: [{ podSelector: {} }] }]
+  egress:  [{ to:   [{ podSelector: {} }] }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-intra-namespace, namespace: linea-verde }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: [{ from: [{ podSelector: {} }] }]
+  egress:  [{ to:   [{ podSelector: {} }] }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-intra-namespace, namespace: datos }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: [{ from: [{ podSelector: {} }] }]
+  egress:  [{ to:   [{ podSelector: {} }] }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-intra-namespace, namespace: asincrono }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: [{ from: [{ podSelector: {} }] }]
+  egress:  [{ to:   [{ podSelector: {} }] }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-intra-namespace, namespace: acl }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: [{ from: [{ podSelector: {} }] }]
+  egress:  [{ to:   [{ podSelector: {} }] }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-intra-namespace, namespace: core-stub }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: [{ from: [{ podSelector: {} }] }]
+  egress:  [{ to:   [{ podSelector: {} }] }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-intra-namespace, namespace: carga }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress: [{ from: [{ podSelector: {} }] }]
+  egress:  [{ to:   [{ podSelector: {} }] }]
+
+# =================================================================
 # ALLOW-DNS por namespace (8 NetworkPolicies, todo namespace necesita resolver Services)
 # =================================================================
 ---

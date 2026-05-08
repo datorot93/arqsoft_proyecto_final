@@ -1,0 +1,83 @@
+# F2 — Apicurio Registry 3.0 con backend KafkaSQL.
+# Función: Schema Registry para AsyncAPI / Avro / JSON Schema sobre Redpanda.
+# Documentación: docs/experimento_asr.md §6.4.4
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apicurio
+  namespace: asincrono
+  labels:
+    app: apicurio
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: SchemaRegistry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apicurio
+  template:
+    metadata:
+      labels:
+        app: apicurio
+        componente: SchemaRegistry
+    spec:
+      containers:
+        - name: apicurio
+          image: quay.io/apicurio/apicurio-registry:3.0.4
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            # Backend KafkaSQL — usa Redpanda como almacenamiento
+            - name: APICURIO_STORAGE_KIND
+              value: kafkasql
+            - name: APICURIO_KAFKA_COMMON_BOOTSTRAP_SERVERS
+              value: "redpanda.asincrono.svc.cluster.local:9093"
+            # Compatibility mode por default: BACKWARD (consumers nuevos leen schemas viejos)
+            - name: APICURIO_AUTH_ANONYMOUS_READ_ACCESS_ENABLED
+              value: "true"
+            # Logs estructurados
+            - name: QUARKUS_LOG_CONSOLE_JSON
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /apis/registry/v3/system/info
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /apis/registry/v3/system/info
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apicurio
+  namespace: asincrono
+  labels:
+    app: apicurio
+    componente: SchemaRegistry
+spec:
+  type: ClusterIP
+  selector:
+    app: apicurio
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+
+# NOTA: ServiceMonitor para Apicurio se aplica en F3 (cuando kube-prometheus-stack
+# provee la CRD monitoring.coreos.com/v1). Ver infra/k8s/observabilidad/ en F3.

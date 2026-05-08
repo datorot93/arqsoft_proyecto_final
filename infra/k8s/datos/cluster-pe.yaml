@@ -1,0 +1,69 @@
+# F2 — Cluster PostgreSQL para Perú (AlmacenCDTXPais — instancia PE)
+# Componente: AlmacenCDTXPais (Datos) · sufijo XPais por país.
+# Operador: CloudNativePG 1.24 · Imagen: postgres 16.4
+# Documentación: docs/experimento_asr.md §6.4.3
+
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-pe
+  namespace: datos
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: AlmacenCDTXPais
+    pais: pe
+spec:
+  description: "AlmacenCDTXPais — instancia Perú"
+
+  # 1 primary + 1 standby (HA local básica)
+  instances: 2
+
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.4
+
+  # Recursos calibrados para kind local (ver F1 ResourceQuotas)
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+  # Almacenamiento: PVC standard (host-path en kind, OCI Block Volume en OKE)
+  storage:
+    size: "1Gi"
+    storageClass: "standard"
+
+  # Bootstrap: crea DB + ejecuta SQL del ConfigMap cdt-bootstrap-sql
+  bootstrap:
+    initdb:
+      database: linea_verde
+      owner: app
+      postInitApplicationSQLRefs:
+        configMapRefs:
+          - name: cdt-bootstrap-sql
+            key: 01-init-cdt.sql
+          - name: cdt-bootstrap-sql
+            key: 02-init-outbox.sql
+
+  # Plantilla del pod con label `pais` para NetworkPolicies cross-país
+  inheritedMetadata:
+    labels:
+      pais: pe
+      componente: AlmacenCDTXPais
+
+  # PodMonitor lo activa F3 (cuando la CRD esté disponible vía kube-prometheus-stack)
+  monitoring:
+    enablePodMonitor: false
+
+  # Logs en formato JSON para Loki (F3)
+  logLevel: info
+  postgresql:
+    parameters:
+      # log_destination y logging_collector los gestiona CNPG (no overridable)
+      log_statement: "ddl"
+      log_min_duration_statement: "200"  # log queries > 200 ms (alineado al SLA ASR-1)
+      max_connections: "100"
+
+  # Backup placeholder (fuera de alcance del experimento)
+  # backup: {}

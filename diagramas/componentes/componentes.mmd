@@ -1,0 +1,129 @@
+flowchart TB
+
+    subgraph Canales["Canales"]
+        APPM[AplicacionMovil]
+        APPW[AplicacionWeb]
+    end
+
+    subgraph Borde["Borde"]
+        WAF[WAF]
+        APIGW[ApiGateway]
+        AUTH[Autorizador]
+    end
+
+    subgraph LineaVerde["LineaVerde"]
+        ONBXP[OnboardingXPais]
+        CDTXP[CDTXPais]
+        CREDXP[CreditoExpressXPais]
+        PAGOS[Pagos]
+        ELIGXP[MotorElegibilidadXPais]
+        NOT[Notificaciones]
+    end
+
+    subgraph Externos["Externos"]
+        CONV[Convenios]
+        VID[ValidadorIdentidad]
+        CORE[CoreBancoZ]
+        CPROV[ConsultaProveedores]
+    end
+
+    subgraph Integracion["Integracion"]
+        subgraph ACL["ACL - CapaAntiCorrupcion"]
+            ADAPT[AdaptadorCore]
+            TRAD[TraductorDominio]
+            CB[CircuitBreaker]
+        end
+        CDC[ChangeDataCapture]
+    end
+
+    subgraph Datos["Datos"]
+        ALCDT[(AlmacenCDTXPais)]
+        ALCRED[(AlmacenCreditoXPais)]
+        ALPAG[(AlmacenPagosXPais)]
+        CACHE[(CacheDistribuido)]
+        ACTC[ActualizadorCache]
+    end
+
+    subgraph Asincrono["Asincrono"]
+        BROKER[(MessageBroker)]
+    end
+
+    subgraph Seguridad["Seguridad"]
+        LOG[(LogAuditoria)]
+        DET[DetectorFraude]
+    end
+
+    %% Canales -> Borde
+    APPM --> WAF
+    APPW --> WAF
+    WAF --> APIGW
+    APIGW --> AUTH
+
+    %% Borde -> LineaVerde
+    APIGW --> ONBXP
+    APIGW --> CDTXP
+    APIGW --> CREDXP
+    APIGW --> PAGOS
+
+    %% LineaVerde -> Externos / ACL
+    ONBXP --> VID
+    CDTXP --> ADAPT
+    CREDXP --> ELIGXP
+    CREDXP --> ADAPT
+    PAGOS --> ADAPT
+    PAGOS --> CONV
+    ELIGXP --> CACHE
+    ELIGXP --> CPROV
+
+    %% LineaVerde -> Datos
+    CDTXP --> ALCDT
+    CREDXP --> ALCRED
+    PAGOS --> ALPAG
+
+    %% ACL interno
+    ADAPT --> TRAD
+    ADAPT --> CB
+    CB --> CORE
+
+    %% CDC
+    CORE -. redo .-> CDC
+    CDC --> BROKER
+
+    %% Eventos
+    CDTXP --> BROKER
+    CREDXP --> BROKER
+    PAGOS --> BROKER
+    BROKER --> NOT
+    BROKER --> ACTC
+    BROKER --> DET
+    ACTC --> CACHE
+
+    %% Seguridad
+    DET --> LOG
+    DET -. congelar .-> CDTXP
+    CDTXP --> LOG
+    CREDXP --> LOG
+    PAGOS --> LOG
+
+    %% Notificaciones a canales
+    NOT --> APPM
+    NOT --> APPW
+
+    %% Estilos
+    classDef canales fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef borde fill:#FFF8E1,stroke:#F57F17,color:#E65100
+    classDef lv fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#ECEFF1,stroke:#37474F,color:#263238
+    classDef integ fill:#E1F5FE,stroke:#0277BD,color:#01579B
+    classDef datos fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef async fill:#E1F5FE,stroke:#0277BD,color:#01579B
+    classDef seg fill:#FFEBEE,stroke:#C62828,color:#B71C1C
+
+    class APPM,APPW canales
+    class WAF,APIGW,AUTH borde
+    class ONBXP,CDTXP,CREDXP,PAGOS,ELIGXP,NOT lv
+    class CONV,VID,CORE,CPROV ext
+    class ADAPT,TRAD,CB,CDC integ
+    class ALCDT,ALCRED,ALPAG,CACHE,ACTC datos
+    class BROKER async
+    class LOG,DET seg

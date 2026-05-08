@@ -1,0 +1,55 @@
+@startuml SecuenciaAperturaCDT
+!theme plain
+autonumber
+
+actor Cliente
+participant "App Movil" as APP
+participant "API Gateway" as GW
+participant "BFF Mobile" as BFF
+participant "CDT Service" as CDTS
+participant "KYC/AntiFraude" as KYC
+database "ATP" as DB
+queue "OCI Streaming" as STR
+participant "Core Adapter (ACL)" as ACL
+participant "Core Bancario" as CORE
+participant "Eligibility Service" as ELIG
+database "Redis Cache" as CACHE
+database "Object Storage (WORM)" as LOG
+
+Cliente -> APP : Solicita apertura CDT
+APP -> GW : POST /cdt (JWT)
+GW -> BFF : forward
+BFF -> CDTS : openCDT(cmd)
+CDTS -> KYC : validateIdentity(client)
+KYC --> CDTS : OK + score
+CDTS -> DB : INSERT cdt (PENDING) + outbox
+CDTS --> BFF : 202 Accepted (id)
+BFF --> APP : ACK (<800 ms) -- ASR-1
+
+note over CDTS, STR
+  Outbox Dispatcher
+  exactly-once delivery
+end note
+
+CDTS -> STR : publish CDTRequested
+STR -> ACL : consume CDTRequested
+ACL -> CORE : SOAP reserveFunds (CB+Bulkhead)
+CORE --> ACL : confirmation
+ACL -> STR : publish CDTConfirmed
+STR -> CDTS : consume CDTConfirmed
+CDTS -> DB : UPDATE status=ACTIVE
+CDTS -> LOG : append immutable log (ASR-8)
+STR -> ELIG : consume CDTConfirmed
+ELIG -> ELIG : RulesEngine.evaluate()
+ELIG -> STR : publish ClientEligible
+STR -> CACHE : SET eligibility=true
+
+note over APP, CACHE
+  Total < 10 min -- ASR-3
+  (vs 4 dias manuales)
+end note
+
+APP -> GW : GET /credit/eligibility
+GW -> CACHE : lookup
+CACHE --> APP : Eligible=true
+@enduml

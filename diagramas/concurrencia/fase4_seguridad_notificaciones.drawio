@@ -1,0 +1,108 @@
+<mxfile host="app.diagrams.net" modified="2026-05-03T15:00:00.000Z" agent="Claude" version="22.1.16" type="device">
+  <diagram name="Fase 4 - Seguridad y Notificaciones" id="fase4">
+    <mxGraphModel dx="2000" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Fase 4 — Seguridad y notificaciones (efectos secundarios async)" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="1420" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Cumple ASR-8 (detección y congelamiento ≤ 30 min) sin bloquear el write path síncrono" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1420" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Broker -->
+        <mxCell id="sb_broker" value="«Shared Boundary»&#10;MessageBroker" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#d6b656;fillColor=#fff2cc;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="280" height="380" as="geometry" />
+        </mxCell>
+        <mxCell id="c_top_cdt" value="cdt.eventos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_broker">
+          <mxGeometry x="40" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_top_cred" value="credito.eventos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_broker">
+          <mxGeometry x="40" y="140" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_top_pago" value="pago.eventos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_broker">
+          <mxGeometry x="40" y="200" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_broker_note" value="Fan-out: 1 evento → N consumers&#10;(cada consumer mantiene su offset propio)&#10;Particionado por clienteId" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="sb_broker">
+          <mxGeometry x="20" y="260" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- DetectorFraude -->
+        <mxCell id="bg_fraud" value="«Background Thread»&#10;DetectorFraude" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#9673a6;fillColor=#e1d5e7;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="380" y="80" width="280" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_fraud" value="DetectorFraude" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#9673a6;fontSize=11" vertex="1" parent="bg_fraud">
+          <mxGeometry x="40" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_fraud_note" value="Estado local por cliente:&#10;ventana deslizante 30 min&#10;(no compartido entre instancias —&#10;sticky por particionamiento)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="bg_fraud">
+          <mxGeometry x="20" y="140" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Notificaciones -->
+        <mxCell id="bg_notif" value="«Background Thread»&#10;Notificaciones" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#9673a6;fillColor=#e1d5e7;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="380" y="380" width="280" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="c_notif" value="Notificaciones" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#9673a6;fontSize=11" vertex="1" parent="bg_notif">
+          <mxGeometry x="40" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_notif_note" value="Fan-out push/email/SMS&#10;non-blocking I/O · sin estado" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="bg_notif">
+          <mxGeometry x="20" y="130" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- LogAuditoria -->
+        <mxCell id="sb_audit" value="«Shared Boundary»&#10;LogAuditoria" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#d6b656;fillColor=#fff2cc;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="720" y="80" width="280" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_audit" value="append-only log" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_audit">
+          <mxGeometry x="80" y="80" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="c_audit_note" value="Sync: append-only sin contención&#10;Write-Once-Read-Many (regulatorio)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="sb_audit">
+          <mxGeometry x="20" y="180" width="240" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- CDTXPais (callee for congelar) -->
+        <mxCell id="t_cdt" value="«Thread»&#10;CDTXPais (servicio LineaVerde)" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#666666;fillColor=none;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="1060" y="80" width="240" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cdt_freeze" value="congelarCDT(id, motivo)" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_cdt">
+          <mxGeometry x="20" y="80" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cdt_freeze_note" value="UPDATE WHERE&#10;status IN (PENDING, ACTIVE)&#10;(idempotente)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="t_cdt">
+          <mxGeometry x="10" y="160" width="220" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Almacen -->
+        <mxCell id="sb_db" value="«Shared Boundary»&#10;AlmacenCDTXPais" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#d6b656;fillColor=#fff2cc;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="1340" y="80" width="140" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_tab_cdt" value="tabla cdt" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_db">
+          <mxGeometry x="20" y="80" width="100" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e1" value="consume cdt/credito/pago.eventos" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="sb_broker" target="bg_fraud">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="WORM append&#10;sin contención" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="bg_fraud" target="sb_audit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="congelarCDT(id) [sync]&#10;si detecta anomalía" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF;strokeColor=#CC0000;fontColor=#CC0000" edge="1" parent="1" source="bg_fraud" target="t_cdt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="UPDATE cdt&#10;SET status=CONGELADO" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="t_cdt" target="sb_db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="consume todos los eventos&#10;(fan-out)" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="sb_broker" target="bg_notif">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="footnote" value="Historia de concurrencia: ningún side-effect bloquea el write path síncrono de Fase 1. DetectorFraude consume eventos en su propio hilo background y mantiene estado local por cliente (sticky a la partición). Cuando detecta anomalía llama síncronamente a CDTXPais.congelarCDT() — un método idempotente que tolera reintentos. Notificaciones es stateless y hace fan-out a múltiples canales en paralelo." style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#444444" vertex="1" parent="1">
+          <mxGeometry x="40" y="600" width="1420" height="80" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

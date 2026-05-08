@@ -1,0 +1,70 @@
+@startuml DespliegueOCI
+!theme plain
+skinparam linetype ortho
+
+cloud "Internet" {
+  actor "Cliente Movil" as USER
+}
+
+cloud "OCI Tenancy - Linea Verde" {
+  node "Edge (Region)" {
+    [OCI CDN + WAF] as CDN
+    [OCI API Gateway] as APIGW
+  }
+  node "VCN Linea Verde" {
+    node "Subnet Publica" {
+      [OCI Load Balancer] as LB
+    }
+    node "OKE Node Pool AD-1" as OKE1 {
+      [Pods Microservicios] as POD1
+    }
+    node "OKE Node Pool AD-2" as OKE2 {
+      [Pods Microservicios] as POD2
+    }
+    node "Subnet Datos" {
+      database "Autonomous DB (ATP)\nAuto-scaling" as ATP
+      database "OCI Cache for Redis\nCluster HA" as REDIS
+      queue "OCI Streaming\nMulti-particion" as STREAM
+      database "Object Storage\nWORM Bucket" as OBJ
+    }
+    node "Servicios Compartidos OCI" {
+      [OCI Functions] as FUNC
+      [OCI Vault / KMS] as VAULT
+      [OCI Logging Analytics] as LOG
+      [OCI Notifications] as NOT
+    }
+  }
+  node "FastConnect" {
+    [FastConnect Privado] as FC
+  }
+}
+
+cloud "Datacenter Banco Z" {
+  [Core Bancario Legacy] as CORE
+  database "Core Oracle DB" as CDB
+  [Oracle GoldenGate CDC] as GG
+}
+
+USER --> CDN
+CDN --> APIGW
+APIGW --> LB
+LB --> POD1
+LB --> POD2
+POD1 --> ATP
+POD2 --> ATP
+POD1 --> REDIS
+POD2 --> REDIS
+POD1 --> STREAM
+POD2 --> STREAM
+POD1 --> OBJ
+POD1 --> VAULT
+POD2 --> VAULT
+STREAM --> FUNC
+FUNC --> REDIS
+POD1 --> FC
+POD2 --> FC
+FC --> CORE
+CORE --> CDB
+GG ..> CDB : lee redo
+GG --> STREAM
+@enduml

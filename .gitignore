@@ -1,0 +1,11 @@
+# Configuración local de Claude Code (por usuario, no se versiona)
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Sistema
+.DS_Store
+*~

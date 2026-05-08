@@ -1,0 +1,141 @@
+<mxfile host="app.diagrams.net" modified="2026-05-03T15:00:00.000Z" agent="Claude" version="22.1.16" type="device">
+  <diagram name="Fase 2 - Proteccion Core" id="fase2">
+    <mxGraphModel dx="2000" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Fase 2 — Protección del Core compartido (ACL como bulkhead concurrente)" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="1420" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Cómo el ACL aísla a Línea Verde de la lentitud o caída del core compartido (apoya ASR-2 y ASR-6/7)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1420" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Three callers -->
+        <mxCell id="t_cdt" value="«Thread»&#10;CDTXPais (N hilos)" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#666666;fillColor=none;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cdtsvc" value="reservarFondos()" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_cdt">
+          <mxGeometry x="20" y="60" width="180" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_cred" value="«Thread»&#10;CreditoExpressXPais (M hilos)" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#666666;fillColor=none;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="c_credsvc" value="desembolsar()" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_cred">
+          <mxGeometry x="20" y="60" width="180" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_pago" value="«Thread»&#10;Pagos (P hilos)" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#666666;fillColor=none;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="40" y="400" width="220" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pagosvc" value="registrarPago()" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_pago">
+          <mxGeometry x="20" y="60" width="180" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ACL detail -->
+        <mxCell id="sb_acl" value="«Shared Boundary»&#10;ACL — entry point único al Core" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#d6b656;fillColor=#fff2cc;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="380" y="80" width="500" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="c_adapter" value="AdaptadorCore" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_acl">
+          <mxGeometry x="40" y="60" width="420" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_trad" value="TraductorDominio" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_acl">
+          <mxGeometry x="40" y="120" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_trad_note" value="dominio ↔ DTO SOAP&#10;sin estado mutable" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="sb_acl">
+          <mxGeometry x="40" y="170" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cb" value="CircuitBreaker" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_acl">
+          <mxGeometry x="260" y="120" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cb_states" value="Estado compartido (atomic):&#10;• failureCount&#10;• state ∈ {CLOSED, OPEN, HALF_OPEN}&#10;Transiciones por CAS" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="sb_acl">
+          <mxGeometry x="260" y="170" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pool_label" value="Connection Pool al Core (Bulkhead)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#444444" vertex="1" parent="sb_acl">
+          <mxGeometry x="40" y="280" width="420" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pool_box" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=10" vertex="1" parent="sb_acl">
+          <mxGeometry x="40" y="310" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pool_conn1" value="conn 1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10" vertex="1" parent="sb_acl">
+          <mxGeometry x="60" y="320" width="60" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pool_conn2" value="conn 2" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10" vertex="1" parent="sb_acl">
+          <mxGeometry x="130" y="320" width="60" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pool_conn3" value="conn 3" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10" vertex="1" parent="sb_acl">
+          <mxGeometry x="200" y="320" width="60" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pool_dots" value="…" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="sb_acl">
+          <mxGeometry x="270" y="320" width="40" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pool_connN" value="conn K" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10" vertex="1" parent="sb_acl">
+          <mxGeometry x="310" y="320" width="60" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_pool_note" value="Pool acotado a K conexiones. Cuando todas están en uso, las llamadas adicionales esperan en cola con timeout corto. Esto IMPIDE que un core lento agote los hilos del Request Pool — el throttling ocurre AQUÍ, no aguas arriba." style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="sb_acl">
+          <mxGeometry x="20" y="390" width="460" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- External Core -->
+        <mxCell id="ext_core" value="«External»&#10;CoreBancoZ" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#666666;fillColor=#f5f5f5;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="940" y="240" width="240" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="c_core_soap" value="SOAP endpoint" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="ext_core">
+          <mxGeometry x="20" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_core_note" value="Capacidad bounded&#10;ventana mantto 1-4am" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="ext_core">
+          <mxGeometry x="20" y="130" width="200" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- State machine of CB -->
+        <mxCell id="sb_cb_sm" value="Estados del CircuitBreaker" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#000000;verticalAlign=top;align=center;fontSize=11;fontStyle=1;container=1;collapsible=0;spacingTop=4" vertex="1" parent="1">
+          <mxGeometry x="940" y="440" width="500" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="cb_closed" value="CLOSED&#10;(llama al core)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10" vertex="1" parent="sb_cb_sm">
+          <mxGeometry x="20" y="50" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="cb_open" value="OPEN&#10;(fail-fast en ms)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10" vertex="1" parent="sb_cb_sm">
+          <mxGeometry x="190" y="50" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="cb_half" value="HALF_OPEN&#10;(prueba 1 request)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10" vertex="1" parent="sb_cb_sm">
+          <mxGeometry x="360" y="50" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="cb_t1" value="threshold de fallos&#10;(CAS counter)" style="endArrow=classic;html=1;rounded=0;fontSize=9;labelBackgroundColor=#FFFFFF" edge="1" parent="sb_cb_sm" source="cb_closed" target="cb_open">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="cb_t2" value="timeout de reset" style="endArrow=classic;html=1;rounded=0;fontSize=9;labelBackgroundColor=#FFFFFF" edge="1" parent="sb_cb_sm" source="cb_open" target="cb_half">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="cb_t3" value="éxito" style="endArrow=classic;html=1;rounded=0;fontSize=9;labelBackgroundColor=#FFFFFF" edge="1" parent="sb_cb_sm" source="cb_half" target="cb_closed">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="420" y="20" />
+              <mxPoint x="80" y="20" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Edges from callers to ACL -->
+        <mxCell id="e1" value="reservarFondos()&#10;[sync]" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="t_cdt" target="sb_acl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="desembolsar()&#10;[sync]" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="t_cred" target="sb_acl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="registrarPago()&#10;[sync]" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="t_pago" target="sb_acl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="SOAP&#10;(solo desde el pool)" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="sb_acl" target="ext_core">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="footnote" value="Historia de concurrencia: tres servicios distintos (CDTXPais, CreditoExpressXPais, Pagos) con N+M+P hilos comparten un único punto de salida al core: el ACL. El Connection Pool (Bulkhead) acota cuántas llamadas simultáneas llegan al core y el CircuitBreaker — cuyo estado es compartido y se modifica con CAS atómico — abre el circuito cuando detecta fallos repetidos, haciendo fail-fast a los hilos en milisegundos. Sin esta capa, un core lento se manifestaría como hilos del Request Pool agotados y respuestas indefinidamente lentas, violando ASR-1 y ASR-2." style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#444444" vertex="1" parent="1">
+          <mxGeometry x="40" y="610" width="1420" height="80" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

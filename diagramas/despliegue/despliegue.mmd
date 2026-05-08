@@ -1,0 +1,62 @@
+flowchart TB
+    subgraph Internet
+        USER[Cliente Movil]
+    end
+
+    subgraph OCI["OCI Tenancy - Linea Verde"]
+        subgraph EDGE["Edge Region Multi-AD"]
+            CDN[OCI CDN + WAF]
+            APIGW[OCI API Gateway]
+        end
+
+        subgraph VCN["VCN Linea Verde"]
+            subgraph PUB["Subnet Publica"]
+                LB[OCI Load Balancer]
+            end
+            subgraph PRIV1["Subnet Privada AD-1"]
+                OKE1[OKE Node Pool AD-1<br/>HPA + Cluster Autoscaler]
+            end
+            subgraph PRIV2["Subnet Privada AD-2"]
+                OKE2[OKE Node Pool AD-2<br/>HPA + Cluster Autoscaler]
+            end
+            subgraph DATA["Subnet Datos"]
+                ATP[(Autonomous DB ATP<br/>Auto-scaling)]
+                REDIS[(OCI Cache for Redis<br/>Cluster HA)]
+                STREAM[(OCI Streaming<br/>Multi-particion)]
+                OBJ[(Object Storage<br/>WORM Bucket)]
+            end
+            subgraph SVC["Servicios OCI"]
+                FUNC[OCI Functions]
+                VAULT[OCI Vault / KMS]
+                LOG[OCI Logging Analytics]
+                NOT[OCI Notifications]
+            end
+        end
+
+        FC[FastConnect Privado]
+    end
+
+    subgraph DC["Datacenter Banco Z"]
+        CORE[Core Bancario Legacy]
+        CDB[(Core Oracle DB)]
+        GG[Oracle GoldenGate CDC]
+    end
+
+    USER --> CDN --> APIGW --> LB
+    LB --> OKE1
+    LB --> OKE2
+    OKE1 --> ATP
+    OKE2 --> ATP
+    OKE1 --> REDIS
+    OKE2 --> REDIS
+    OKE1 --> STREAM
+    OKE2 --> STREAM
+    OKE1 --> OBJ
+    OKE1 --> VAULT
+    OKE2 --> VAULT
+    STREAM --> FUNC --> REDIS
+    OKE1 -.via FastConnect.-> FC
+    OKE2 -.via FastConnect.-> FC
+    FC --> CORE --> CDB
+    GG -.lee redo.-> CDB
+    GG --> STREAM

@@ -1,0 +1,249 @@
+@startuml ClasesLineaVerde
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+
+' =================== BORDE ===================
+package "Borde" {
+  class APIGateway {
+    -rutas : Map
+    +enrutar(req : Request) : Response
+    +aplicarRateLimit(req : Request) : void
+  }
+  class Autorizador {
+    +autorizar(token : TokenJWT) : Identidad
+    +emitirToken(cliente : Cliente) : TokenJWT
+  }
+}
+
+' ================== LINEA VERDE ==================
+package "LineaVerde" {
+  class OnboardingService {
+    -pais : Pais
+    -validador : ValidadorIdentidadClient
+    +solicitarRegistro(req : SolicitudRegistro) : SolicitudRegistro
+    +completarKYC(id : UUID, evidencia : Evidencia) : void
+  }
+  class CDTService {
+    -pais : Pais
+    -almacen : AlmacenCDT
+    -acl : CapaAntiCorrupcion
+    -broker : MessageBroker
+    +abrirCDT(cmd : AbrirCDTCmd) : ResultadoApertura
+    +consultarCDT(id : UUID) : CDT
+    +congelarCDT(id : UUID, motivo : String) : void
+  }
+  class CDT {
+    -id : UUID
+    -clienteId : UUID
+    -pais : Pais
+    -monto : Money
+    -tasa : Tasa
+    -estado : CDTStatus
+    +confirmar() : void
+    +congelar(motivo : String) : void
+  }
+  class CreditoService {
+    -pais : Pais
+    -almacen : AlmacenCredito
+    -elegibilidad : ElegibilidadService
+    -acl : CapaAntiCorrupcion
+    +solicitar(cmd : SolicitudCredito) : Credito
+    +aprobar(id : UUID) : void
+    +desembolsar(id : UUID) : void
+  }
+  class Credito {
+    -id : UUID
+    -clienteId : UUID
+    -pais : Pais
+    -monto : Money
+    -plazoMeses : int
+    -estado : CreditoStatus
+  }
+  class PagosService {
+    -pais : Pais
+    -almacen : AlmacenPagos
+    -acl : CapaAntiCorrupcion
+    -convenios : ConveniosClient
+    +registrarPago(cmd : RegistrarPagoCmd) : Pago
+    +consultarPago(id : UUID) : Pago
+  }
+  class Pago {
+    -id : UUID
+    -clienteId : UUID
+    -convenio : String
+    -monto : Money
+    -estado : PagoStatus
+  }
+  class ElegibilidadService {
+    -motor : MotorReglas
+    -cache : CacheDistribuido
+    +evaluar(cliente : UUID) : ResultadoElegibilidad
+    +onCDTConfirmado(evt : CDTAbiertoEvento) : void
+  }
+  class MotorReglas {
+    -reglas : List<Regla>
+    +evaluar(hechos : Hechos) : Decision
+  }
+  class Regla {
+    -id : String
+    +aplicar(hechos : Hechos) : boolean
+  }
+  class NotificacionService {
+    +notificar(canal : Canal, msg : String) : void
+    +onEvento(evt : EventoDominio) : void
+  }
+}
+
+' ===================== ACL =======================
+package "ACL" {
+  class CapaAntiCorrupcion {
+    -adaptador : AdaptadorCore
+    +reservarFondos(cmd : ReservarCmd) : Resultado
+    +consultarSaldo(clienteId : UUID) : Saldo
+  }
+  class AdaptadorCore {
+    -client : CoreBancoZClient
+    -traductor : TraductorDominio
+    -breaker : CircuitBreaker
+    +invocar(req : Request) : Respuesta
+  }
+  class TraductorDominio {
+    +aDtoCore(modelo : Modelo) : DtoCore
+    +deDtoCore(dto : DtoCore) : Modelo
+  }
+  class CircuitBreaker {
+    -estado : Estado
+    +ejecutar(call : Supplier) : T
+  }
+  class ChangeDataCaptureProcessor {
+    -broker : MessageBroker
+    +procesarRedo(evt : RedoEvent) : void
+    +publicarSaldoCambiado(saldo : Saldo) : void
+  }
+}
+
+' =================== EXTERNOS ====================
+package "Externos" {
+  class CoreBancoZClient {
+    +llamarSOAP(req : SOAPRequest) : SOAPResponse
+  }
+  class ConveniosClient {
+    +consultarConvenio(id : String) : Convenio
+    +registrarPago(req : PagoRequest) : Confirmacion
+  }
+  class ValidadorIdentidadClient {
+    +validar(documento : Documento, biometria : Biometria) : Resultado
+  }
+  class ConsultaProveedoresClient {
+    +consultar(proveedor : String, query : Query) : Datos
+  }
+}
+
+' ===================== DATOS =====================
+package "Datos" {
+  abstract class AlmacenMultiPais<T> {
+    -pais : Pais
+    +guardar(entidad : T) : void
+    +buscarPorId(id : UUID) : T
+  }
+  class AlmacenCDT
+  class AlmacenCredito
+  class AlmacenPagos
+  interface CacheDistribuido {
+    +get(key : String) : Object
+    +put(key : String, val : Object, ttl : Duration) : void
+    +invalidar(key : String) : void
+  }
+  class ActualizadorCache {
+    -cache : CacheDistribuido
+    +onSaldoCambiado(evt : SaldoCambiadoEvento) : void
+  }
+}
+
+' =================== ASINCRONO ===================
+package "Asincrono" {
+  class MessageBroker {
+    +publicar(topic : String, evento : EventoDominio) : void
+    +suscribir(topic : String, handler : Consumer) : void
+  }
+  abstract class EventoDominio {
+    -id : UUID
+    -timestamp : Instant
+  }
+  class CDTAbiertoEvento
+  class CreditoSolicitadoEvento
+  class PagoRegistradoEvento
+  class SaldoCambiadoEvento
+}
+
+' =================== SEGURIDAD ===================
+package "Seguridad" {
+  class LogAuditoria {
+    +registrar(accion : String, contexto : Map) : void
+  }
+  class DetectorFraude {
+    -analizador : AnalizadorComportamiento
+    -auditoria : LogAuditoria
+    +analizar(operacion : Operacion) : Veredicto
+    +congelar(cdtId : UUID) : void
+  }
+  class AnalizadorComportamiento {
+    +scoring(cliente : UUID, operacion : Operacion) : float
+  }
+}
+
+' ================== RELACIONES ===================
+APIGateway --> Autorizador : usa
+APIGateway --> OnboardingService
+APIGateway --> CDTService
+APIGateway --> CreditoService
+APIGateway --> PagosService
+
+CDTService --> CDT
+CDTService --> AlmacenCDT
+CDTService --> CapaAntiCorrupcion
+CDTService --> MessageBroker
+
+CreditoService --> Credito
+CreditoService --> AlmacenCredito
+CreditoService --> ElegibilidadService
+CreditoService --> CapaAntiCorrupcion
+
+PagosService --> Pago
+PagosService --> AlmacenPagos
+PagosService --> CapaAntiCorrupcion
+PagosService --> ConveniosClient
+
+OnboardingService --> ValidadorIdentidadClient
+
+ElegibilidadService --> MotorReglas
+ElegibilidadService --> CacheDistribuido
+MotorReglas o-- Regla
+
+CapaAntiCorrupcion *-- AdaptadorCore
+AdaptadorCore --> TraductorDominio
+AdaptadorCore --> CircuitBreaker
+AdaptadorCore --> CoreBancoZClient
+
+ChangeDataCaptureProcessor --> MessageBroker
+
+AlmacenCDT --|> AlmacenMultiPais
+AlmacenCredito --|> AlmacenMultiPais
+AlmacenPagos --|> AlmacenMultiPais
+
+ActualizadorCache --> CacheDistribuido
+ActualizadorCache --> MessageBroker
+
+NotificacionService --> MessageBroker
+
+CDTAbiertoEvento --|> EventoDominio
+CreditoSolicitadoEvento --|> EventoDominio
+PagoRegistradoEvento --|> EventoDominio
+SaldoCambiadoEvento --|> EventoDominio
+
+DetectorFraude --> AnalizadorComportamiento
+DetectorFraude --> LogAuditoria
+DetectorFraude ..> CDTService : congelar()
+DetectorFraude --> MessageBroker
+@enduml

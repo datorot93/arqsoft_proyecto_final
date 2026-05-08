@@ -1,0 +1,42 @@
+sequenceDiagram
+    autonumber
+    actor Cliente
+    participant App as App Movil
+    participant GW as API Gateway
+    participant BFF as BFF Mobile
+    participant CDTS as CDT Service
+    participant KYC as KYC/AntiFraude
+    participant DB as ATP
+    participant STR as OCI Streaming
+    participant ACL as Core Adapter
+    participant Core as Core Bancario
+    participant ELIG as Eligibility Service
+    participant CACHE as Redis
+    participant LOG as Object Storage WORM
+
+    Cliente->>App: Solicita apertura CDT
+    App->>GW: POST /cdt (JWT)
+    GW->>BFF: forward
+    BFF->>CDTS: openCDT(cmd)
+    CDTS->>KYC: validateIdentity(client)
+    KYC-->>CDTS: OK + score
+    CDTS->>DB: INSERT cdt (PENDING) + outbox
+    CDTS-->>BFF: 202 Accepted (id)
+    BFF-->>App: ACK (<800 ms) - cumple ASR-1
+    Note over CDTS,STR: Outbox Dispatcher publica
+    CDTS->>STR: publish CDTRequested
+    STR->>ACL: consume CDTRequested
+    ACL->>Core: SOAP reserveFunds (CB+Bulkhead)
+    Core-->>ACL: confirmation
+    ACL->>STR: publish CDTConfirmed
+    STR->>CDTS: consume CDTConfirmed
+    CDTS->>DB: UPDATE status=ACTIVE
+    CDTS->>LOG: append immutable log (ASR-8)
+    STR->>ELIG: consume CDTConfirmed
+    ELIG->>ELIG: RulesEngine.evaluate()
+    ELIG->>STR: publish ClientEligible
+    STR->>CACHE: SET eligibility=true
+    Note over App,CACHE: Total < 10 min - cumple ASR-3
+    App->>GW: GET /credit/eligibility
+    GW->>CACHE: lookup
+    CACHE-->>App: Eligible=true

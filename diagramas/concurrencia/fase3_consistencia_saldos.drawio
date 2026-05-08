@@ -1,0 +1,163 @@
+<mxfile host="app.diagrams.net" modified="2026-05-03T15:00:00.000Z" agent="Claude" version="22.1.16" type="device">
+  <diagram name="Fase 3 - Consistencia Saldos" id="fase3">
+    <mxGraphModel dx="2200" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Fase 3 — Consistencia de saldos y elegibilidad (CQRS + CDC)" style="text;html=1;align=center;verticalAlign=middle;fontSize=14;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="1620" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Resuelve comportamiento #4 (saldo desincronizado), cumple ASR-3 (elegibilidad &lt;10 min) y ASR-4 (drift &lt;300 ms)" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#666666" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1620" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ROW 1: Write side (CDC + Eligibility) -->
+
+        <!-- External Core -->
+        <mxCell id="ext_core" value="«External»&#10;CoreBancoZ" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#666666;fillColor=#f5f5f5;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="240" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_core_db" value="Oracle DB&#10;+ redo log" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="ext_core">
+          <mxGeometry x="60" y="80" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="c_core_note" value="Cambios desde sucursales,&#10;cajeros y app — fuera del&#10;control de Línea Verde" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="ext_core">
+          <mxGeometry x="20" y="170" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ChangeDataCapture -->
+        <mxCell id="bg_cdc" value="«Background Thread»&#10;ChangeDataCapture" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#9673a6;fillColor=#e1d5e7;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="340" y="80" width="280" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cdc" value="ChangeDataCapture" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#9673a6;fontSize=11" vertex="1" parent="bg_cdc">
+          <mxGeometry x="40" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cdc_note" value="Lee redo log binario&#10;sin lock sobre tablas&#10;orden de transacciones preservado" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="bg_cdc">
+          <mxGeometry x="20" y="140" width="240" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Broker -->
+        <mxCell id="sb_broker" value="«Shared Boundary»&#10;MessageBroker" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#d6b656;fillColor=#fff2cc;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="680" y="80" width="240" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_top_saldo" value="saldo.cambios" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_broker">
+          <mxGeometry x="40" y="80" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_top_cdt" value="cdt.eventos" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_broker">
+          <mxGeometry x="40" y="140" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_broker_note" value="Particionado por clienteId&#10;(serializa updates por cuenta)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="sb_broker">
+          <mxGeometry x="10" y="190" width="220" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ActualizadorCache -->
+        <mxCell id="bg_cache" value="«Background Thread»&#10;ActualizadorCache" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#9673a6;fillColor=#e1d5e7;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="980" y="80" width="240" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_actcache" value="ActualizadorCache" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#9673a6;fontSize=11" vertex="1" parent="bg_cache">
+          <mxGeometry x="20" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_actcache_note" value="key-based partitioning&#10;evita race entre updates&#10;de la misma cuenta" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="bg_cache">
+          <mxGeometry x="20" y="140" width="200" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- MotorElegibilidad -->
+        <mxCell id="bg_elig" value="«Background Thread»&#10;MotorElegibilidadXPais" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#9673a6;fillColor=#e1d5e7;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="1280" y="80" width="380" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="c_motor" value="MotorElegibilidadXPais" style="shape=component;align=center;html=1;fillColor=#FFFFFF;strokeColor=#9673a6;fontSize=11" vertex="1" parent="bg_elig">
+          <mxGeometry x="90" y="80" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_rules_state" value="reglas read-only · hot-reload por config" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="bg_elig">
+          <mxGeometry x="20" y="140" width="340" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ROW 2: Read side -->
+
+        <!-- Cliente actor -->
+        <mxCell id="cli" value="Cliente&#10;(App Movil/Web)" style="rounded=0;whiteSpace=wrap;html=1;strokeColor=#666666;fillColor=#f5f5f5;fontSize=11;fontStyle=1;align=center;verticalAlign=middle" vertex="1" parent="1">
+          <mxGeometry x="40" y="450" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Borde Pool (lecturas) -->
+        <mxCell id="t_borde" value="«Thread»&#10;Borde Pool (1..N)" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#666666;fillColor=none;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="220" y="380" width="220" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="c_waf" value="WAF" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_borde">
+          <mxGeometry x="30" y="60" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_apigw" value="ApiGateway" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_borde">
+          <mxGeometry x="30" y="120" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_auth" value="Autorizador" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_borde">
+          <mxGeometry x="30" y="180" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_borde_note" value="Pool acotado.&#10;Rate-limit por clienteId" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="t_borde">
+          <mxGeometry x="10" y="230" width="200" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Request Pool: lecturas -->
+        <mxCell id="t_req" value="«Thread»&#10;Request Pool LineaVerde (1..M)" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#666666;fillColor=none;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="480" y="380" width="320" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="c_qry_cdt" value="CDTXPais.consultar()" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_req">
+          <mxGeometry x="40" y="60" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_qry_cred" value="CreditoExpressXPais.elegibilidad()" style="shape=component;align=center;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11" vertex="1" parent="t_req">
+          <mxGeometry x="40" y="120" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_qry_note" value="N hilos paralelos&#10;lock-free reads&#10;NO consultan al core&#10;(funciona en ventana mantto)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="t_req">
+          <mxGeometry x="20" y="170" width="280" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Cache -->
+        <mxCell id="sb_redis" value="«Shared Boundary»&#10;CacheDistribuido" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=8 4;strokeColor=#d6b656;fillColor=#fff2cc;verticalAlign=top;align=center;fontSize=12;fontStyle=1;container=1;collapsible=0;spacingTop=8" vertex="1" parent="1">
+          <mxGeometry x="840" y="380" width="820" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="c_redis_kv" value="key/value store" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#FFFFFF;strokeColor=#666666;fontSize=11" vertex="1" parent="sb_redis">
+          <mxGeometry x="80" y="80" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="c_redis_keys" value="saldo:&lt;cuenta&gt;&#10;eligibility:&lt;cliente&gt;" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=0" vertex="1" parent="sb_redis">
+          <mxGeometry x="280" y="80" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c_redis_note" value="Sync: ops atómicas single-key (CAS / SET NX) · TTL corto · sin lock cliente · escritores se serializan por particionamiento upstream" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#666666" vertex="1" parent="sb_redis">
+          <mxGeometry x="20" y="180" width="780" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e1" value="read redo log&#10;non-blocking" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="bg_cdc" target="ext_core">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="publish saldo.cambios" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF;dashed=1" edge="1" parent="1" source="bg_cdc" target="sb_broker">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="consume saldo.cambios" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="sb_broker" target="bg_cache">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="consume cdt.eventos" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="sb_broker" target="bg_elig">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="Compare-and-Swap + TTL refresh" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="bg_cache" target="sb_redis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="SET eligibility (atómico)" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="bg_elig" target="sb_redis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="HTTPS" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="cli" target="t_borde">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="forward HTTP/gRPC&#10;[síncrono]" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="t_borde" target="t_req">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="GET (lock-free) sub-ms" style="endArrow=classic;html=1;rounded=0;edgeStyle=orthogonalEdgeStyle;fontSize=10;labelBackgroundColor=#FFFFFF" edge="1" parent="1" source="t_req" target="sb_redis">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="footnote" value="Historia de concurrencia: el redo log del core es fuente única de verdad ordenada. ChangeDataCapture la convierte en stream y el particionamiento por clienteId garantiza que las actualizaciones de la misma cuenta se aplican en orden. CAS sobre el cache hace cada update atómico. Las lecturas entran por el Borde (rate-limit), pasan al pool de LineaVerde y consultan el cache lock-free — NO tocan al core, lo que las desacopla de la ventana de mantenimiento (ASR-6)." style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontStyle=2;fontColor=#444444" vertex="1" parent="1">
+          <mxGeometry x="40" y="690" width="1620" height="80" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

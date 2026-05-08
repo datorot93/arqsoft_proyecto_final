@@ -1,0 +1,185 @@
+# F1 — Allowlist explícito de tráfico cross-namespace.
+# Regla maestra: LineaVerde NO puede llegar a CoreBancoZ directamente; SOLO vía ACL.
+# Documentación: diagramas_final/componentes.jpeg + docs/experimento_asr.md §6.2.3
+
+# =================================================================
+# borde — recibe carga, egresa a linea-verde + observabilidad
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: borde-ingress-from-carga, namespace: borde }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: carga } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: borde-egress-to-linea-verde, namespace: borde }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: linea-verde } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+
+# =================================================================
+# linea-verde — recibe de borde; egresa a datos, asincrono, ACL, observabilidad
+# (NO a core-stub — ese es el corazón de la regla arquitectónica)
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: linea-verde-ingress-from-borde, namespace: linea-verde }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: borde } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: linea-verde-egress-allowlist, namespace: linea-verde }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        # SOLO estos 4 destinos están permitidos. core-stub NO está en la lista.
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: datos } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: asincrono } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: acl } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+
+# =================================================================
+# datos — recibe de linea-verde
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: datos-ingress-from-linea-verde, namespace: datos }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: linea-verde } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: datos-egress-observabilidad, namespace: datos }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } } }]
+
+# =================================================================
+# asincrono — recibe de linea-verde (productor) y acl (consumer del outbox)
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: asincrono-ingress, namespace: asincrono }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: linea-verde } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: acl } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: asincrono-egress-observabilidad, namespace: asincrono }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } } }]
+
+# =================================================================
+# acl — único punto autorizado a egresar hacia core-stub
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: acl-ingress-from-linea-verde, namespace: acl }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: linea-verde } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: acl-egress-to-core-and-broker, namespace: acl }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        # ACL es el ÚNICO namespace autorizado a alcanzar core-stub.
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: core-stub } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: asincrono } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+
+# =================================================================
+# core-stub — INGRESS RESTRINGIDO a SOLO acl + observabilidad
+# Esta es la regla que hace que linea-verde no pueda saltarse el ACL.
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: core-stub-ingress-from-acl-only, namespace: core-stub }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: acl } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: core-stub-egress-observabilidad, namespace: core-stub }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } } }]
+
+# =================================================================
+# carga — el generador SOLO puede salir hacia borde:8000 (Kong proxy)
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: carga-egress-only-borde, namespace: carga }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: borde } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: carga-ingress-observabilidad, namespace: carga }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } } }]

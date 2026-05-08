@@ -1,0 +1,99 @@
+# F1 — Los 8 namespaces operativos del experimento.
+# Documentación: docs/experimento_asr.md §6.2.3
+# Cada namespace mapea a un subsistema de diagramas_final/componentes.jpeg.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: borde
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Borde
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    descripcion: "Componente ApiGateway (Kong) + WAF + Autorizador (excluidos del experimento)"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: linea-verde
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: LineaVerde
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    descripcion: "CDTXPais (PE/MX/CO) — único servicio en alcance del experimento"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datos
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Datos
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    descripcion: "AlmacenCDTXPais (3 clusters Postgres por país)"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: asincrono
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Asincrono
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    descripcion: "MessageBroker (Redpanda) + Apicurio Schema Registry"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: acl
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Integracion
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    descripcion: "AdaptadorCore + CircuitBreaker — único punto de salida hacia CoreBancoZ"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: core-stub
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Externos
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    descripcion: "CoreBancoZ stub — inyecta latencia Pareto y errores Bernoulli"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observabilidad
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Observabilidad
+    pod-security.kubernetes.io/enforce: privileged
+  annotations:
+    descripcion: "Prometheus + Grafana + Tempo + Loki + OTel Collector"
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: carga
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Carga
+    pod-security.kubernetes.io/enforce: baseline
+  annotations:
+    descripcion: "Generador k6 — solo puede entrar al sistema vía Kong (borde)"

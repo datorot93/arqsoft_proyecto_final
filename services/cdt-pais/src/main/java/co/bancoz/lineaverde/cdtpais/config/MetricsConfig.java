@@ -1,29 +1,42 @@
 package co.bancoz.lineaverde.cdtpais.config;
 
 import co.bancoz.lineaverde.commons.instrumentation.HistogramBucketsConfig;
+import io.micrometer.core.aop.TimedAspect;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PostConstruct;
+import org.springframework.boot.actuate.autoconfigure.metrics.MeterRegistryCustomizer;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * Configuración de Micrometer para cdt-pais.
- * Lee los buckets desde el ConfigMap montado y registra el MeterFilter global.
- * El ConfigMap (histogram-buckets) es replicado en el namespace linea-verde
- * como espejo del original en observabilidad (limitación K8s: CMs no cross-namespace).
+ * Registra el MeterFilter de buckets ANTES de que cualquier Timer sea creado.
+ *
+ * IMPORTANTE: el MeterFilter debe aplicarse vía MeterRegistryCustomizer (no
+ * @PostConstruct) para garantizar que esté activo antes de cualquier @Timed.
+ * Spring Boot ejecuta los Customizer al construir el MeterRegistry, mientras
+ * que @PostConstruct corre después — riesgo de meters creados con buckets default.
  */
 @Configuration
 public class MetricsConfig {
 
-    private final MeterRegistry meterRegistry;
-    private final HistogramBucketsConfig bucketsConfig;
-
-    public MetricsConfig(MeterRegistry meterRegistry) {
-        this.meterRegistry = meterRegistry;
-        this.bucketsConfig = new HistogramBucketsConfig();
+    /**
+     * Aplica el MeterFilter al MeterRegistry durante su construcción.
+     * Garantiza que TODOS los Timers (incluidos los creados por TimedAspect)
+     * tengan los SLO buckets del experimento.
+     */
+    @Bean
+    public MeterRegistryCustomizer<MeterRegistry> histogramBucketsCustomizer() {
+        HistogramBucketsConfig bucketsConfig = new HistogramBucketsConfig();
+        return registry -> bucketsConfig.registerMeterFilter(registry);
     }
 
-    @PostConstruct
-    public void configureBuckets() {
-        bucketsConfig.registerMeterFilter(meterRegistry);
+    /**
+     * TimedAspect: requerido para que la anotación @Timed (Micrometer) funcione.
+     * Sin este bean, @Timed es inerte y no registra Timers.
+     * El starter spring-boot-starter-aop debe estar en el classpath.
+     */
+    @Bean
+    public TimedAspect timedAspect(MeterRegistry registry) {
+        return new TimedAspect(registry);
     }
 }

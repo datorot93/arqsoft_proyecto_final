@@ -57,10 +57,15 @@ management:
       phase: ${PHASE:baseline}
       pod: ${POD_NAME:local}
     distribution:
-      # Habilitar histogramas (los SLOs/buckets se configuran en MetricsConfig vía ConfigMap)
+      # Buckets SLO declarados aquí para garantizar que el PropertiesMeterFilter
+      # los aplique antes de que TimedAspect cree los Timers. El MeterFilter del ConfigMap
+      # en MetricsConfig se mantiene como respaldo para cualquier *_duration_seconds nuevo.
       percentiles-histogram:
         cdt_open_handler_duration_seconds: false
         cdt_db_write_duration_seconds: false
+      slo:
+        cdt_open_handler_duration_seconds: 10ms,25ms,50ms,100ms,200ms,400ms,600ms,800ms,1s,1500ms,2500ms,5s,10s
+        cdt_db_write_duration_seconds: 10ms,25ms,50ms,100ms,200ms,400ms,600ms,800ms,1s,1500ms,2500ms,5s,10s
 
 logging:
   level:

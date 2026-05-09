@@ -45,9 +45,12 @@ public class ResilientCoreClient {
      * Si el Bulkhead está saturado, lanza BulkheadFullException → fallbackMethod.
      * Si todos los reintentos fallan, lanza la última excepción → fallbackMethod.
      */
+    // NOTA: el fallback se declara SOLO en el outer-most decorator (@CircuitBreaker).
+    // Si lo agregamos también a @Retry o @Bulkhead, esos lo invocan ANTES de que el CB
+    // vea la excepción y entonces el CB cuenta el call como successful — falla el gate T-7.
     @CircuitBreaker(name = "core", fallbackMethod = "reservarFallback")
-    @Bulkhead(name = "core", fallbackMethod = "reservarFallback")
-    @Retry(name = "core", fallbackMethod = "reservarFallback")
+    @Bulkhead(name = "core")
+    @Retry(name = "core")
     public ReservarResponse reservar(ReservarRequest req) {
         return coreClient.llamarCore(req);
     }

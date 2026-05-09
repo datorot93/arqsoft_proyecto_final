@@ -3,7 +3,7 @@ package co.bancoz.lineaverde.acl.config;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
-import org.apache.hc.core5.pool.PoolConcurrencyPolicy;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
 import org.apache.hc.core5.pool.PoolReusePolicy;
 import org.apache.hc.core5.util.TimeValue;
 import org.springframework.context.annotation.Bean;
@@ -24,18 +24,14 @@ public class HttpClientConfig {
 
     @Bean
     public RestClient restClient() {
-        // HttpComponents 5 API: TTL se configura en el constructor del PoolingConnectionManager
-        PoolingHttpClientConnectionManager connectionManager =
-                new PoolingHttpClientConnectionManager(
-                        null,                          // socketFactoryRegistry (default)
-                        PoolConcurrencyPolicy.STRICT,
-                        PoolReusePolicy.LIFO,
-                        TimeValue.ofSeconds(60)        // TTL de conexión
-                );
-        // Máximo de conexiones totales (todas las rutas)
-        connectionManager.setMaxTotal(20);
-        // Máximo por ruta (solo hay una ruta: core-stub)
-        connectionManager.setDefaultMaxPerRoute(20);
+        // HttpComponents 5: usar el Builder para que el SocketFactoryRegistry default
+        // se inicialice correctamente. Pasar null al constructor falla (NPE en Args.notNull).
+        PoolingHttpClientConnectionManager connectionManager = PoolingHttpClientConnectionManagerBuilder.create()
+                .setMaxConnTotal(20)                              // Máximo total (todas las rutas)
+                .setMaxConnPerRoute(20)                           // Máximo por ruta (solo hay una: core-stub)
+                .setConnPoolPolicy(PoolReusePolicy.LIFO)
+                .setConnectionTimeToLive(TimeValue.ofSeconds(60)) // TTL de conexión
+                .build();
 
         CloseableHttpClient httpClient = HttpClients.custom()
                 .setConnectionManager(connectionManager)

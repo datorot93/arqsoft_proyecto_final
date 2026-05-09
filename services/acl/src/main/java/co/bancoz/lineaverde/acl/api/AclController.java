@@ -1,5 +1,6 @@
 package co.bancoz.lineaverde.acl.api;
 
+import co.bancoz.lineaverde.acl.client.CoreCallContext;
 import co.bancoz.lineaverde.acl.client.ResilientCoreClient;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -34,9 +35,18 @@ public class AclController {
      * Con Resilience4j: CircuitBreaker + Bulkhead + Retry (configurados en application.yml).
      */
     @PostMapping("/reservar")
-    public ResponseEntity<ReservarResponse> reservar(@Valid @RequestBody ReservarRequest req) {
+    public ResponseEntity<ReservarResponse> reservar(
+            @Valid @RequestBody ReservarRequest req,
+            @RequestHeader(value = "X-Stub-Error-Rate", required = false) String errorRate) {
         log.debug("ACL: reserva recibida para cdtId={}, pais={}", req.cdtId(), req.pais());
-        ReservarResponse response = coreClient.reservar(req);
-        return ResponseEntity.ok(response);
+        if (errorRate != null) {
+            CoreCallContext.setErrorRate(errorRate);
+        }
+        try {
+            ReservarResponse response = coreClient.reservar(req);
+            return ResponseEntity.ok(response);
+        } finally {
+            CoreCallContext.clear();
+        }
     }
 }

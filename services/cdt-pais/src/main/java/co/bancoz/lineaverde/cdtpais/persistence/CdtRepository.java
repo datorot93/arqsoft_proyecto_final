@@ -4,6 +4,8 @@ import co.bancoz.lineaverde.commons.domain.Cdt;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
+
 /**
  * Repositorio de acceso a cdt.cdt.
  * Usa JdbcTemplate directamente (más rápido que JPA para INSERTs en el critical path).
@@ -36,8 +38,8 @@ public class CdtRepository {
                 cdt.getPlazoDias(),
                 cdt.getTasaAnual(),
                 cdt.getEstado().name(),
-                cdt.getCreatedAt(),
-                cdt.getUpdatedAt()
+                Timestamp.from(cdt.getCreatedAt()),
+                Timestamp.from(cdt.getUpdatedAt())
         );
     }
 }

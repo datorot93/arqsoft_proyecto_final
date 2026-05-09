@@ -67,10 +67,16 @@ public class CoreClient {
                     "pais",       req.pais()
             );
 
-            // Llamada HTTP con RestClient — el pool está configurado en HttpClientConfig
-            var coreResp = restClient.post()
+            // Llamada HTTP con RestClient — el pool está configurado en HttpClientConfig.
+            // Si el caller del ACL envió X-Stub-Error-Rate (tests del gate), propagarlo al core-stub.
+            String errorRate = CoreCallContext.getErrorRate();
+            var requestSpec = restClient.post()
                     .uri(coreStubUrl + "/core/reservar")
-                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.APPLICATION_JSON);
+            if (errorRate != null) {
+                requestSpec = requestSpec.header("X-Stub-Error-Rate", errorRate);
+            }
+            var coreResp = requestSpec
                     .body(corePayload)
                     .retrieve()
                     .toEntity(Map.class);

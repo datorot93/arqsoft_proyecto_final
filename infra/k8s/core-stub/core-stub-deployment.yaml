@@ -32,7 +32,7 @@ spec:
       containers:
         - name: core-stub
           image: kind-registry:5000/linea-verde/core-stub:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080

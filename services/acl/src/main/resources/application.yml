@@ -27,6 +27,9 @@ management:
     tags:
       phase: ${PHASE:baseline}
       pod: ${POD_NAME:local}
+    distribution:
+      slo:
+        core_call_duration_seconds: 10ms,25ms,50ms,100ms,200ms,400ms,600ms,800ms,1s,1500ms,2500ms,5s,10s
 
 # Resilience4j — configuración del CircuitBreaker "core"
 # Spec F4: slidingWindow COUNT_BASED de 20, threshold 50%, open wait 30s, half-open 3 calls

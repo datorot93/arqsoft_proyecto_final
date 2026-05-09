@@ -33,7 +33,7 @@ spec:
       containers:
         - name: acl
           image: kind-registry:5000/linea-verde/acl:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8080

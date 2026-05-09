@@ -37,10 +37,13 @@ kind: ResourceQuota
 metadata: { name: quota, namespace: linea-verde }
 spec:
   hard:
-    requests.cpu: "4"
-    requests.memory: "8Gi"
-    limits.cpu: "8"
-    limits.memory: "12Gi"
+    # F4 baseline: 9 pods (3×cdt-pais×2 + 3×outbox) ≈ 7.5 CPU lim.
+    # maxSurge 25% durante rollouts requiere ~10 CPU. HPA F5 sube más.
+    # Subido de 8→16 CPU para no bloquear rollouts y dejar margen al HPA en kind 1-nodo (host con 8 vCPU físicos).
+    requests.cpu: "8"
+    requests.memory: "16Gi"
+    limits.cpu: "16"
+    limits.memory: "24Gi"
     pods: "70"
 ---
 apiVersion: v1

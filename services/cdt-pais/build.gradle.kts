@@ -21,6 +21,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
+    // AOP: requerido para que @Timed (Micrometer) funcione vía TimedAspect
+    implementation("org.springframework.boot:spring-boot-starter-aop")
+
     // Validación Bean Validation
     implementation("org.springframework.boot:spring-boot-starter-validation")
 

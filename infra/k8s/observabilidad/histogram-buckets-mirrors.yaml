@@ -22,8 +22,8 @@ metadata:
   namespace: linea-verde
   labels:
     app.kubernetes.io/part-of: linea-verde-experimento
-    fuente-de-verdad: observabilidad/histogram-buckets
   annotations:
+    fuente-de-verdad: observabilidad/histogram-buckets
     descripcion: "Espejo de observabilidad/histogram-buckets. NO editar directamente."
 data:
   buckets.json: |
@@ -45,8 +45,8 @@ metadata:
   namespace: acl
   labels:
     app.kubernetes.io/part-of: linea-verde-experimento
-    fuente-de-verdad: observabilidad/histogram-buckets
   annotations:
+    fuente-de-verdad: observabilidad/histogram-buckets
     descripcion: "Espejo de observabilidad/histogram-buckets. NO editar directamente."
 data:
   buckets.json: |
@@ -67,8 +67,8 @@ metadata:
   namespace: core-stub
   labels:
     app.kubernetes.io/part-of: linea-verde-experimento
-    fuente-de-verdad: observabilidad/histogram-buckets
   annotations:
+    fuente-de-verdad: observabilidad/histogram-buckets
     descripcion: "Espejo de observabilidad/histogram-buckets. NO editar directamente."
 data:
   buckets.json: |

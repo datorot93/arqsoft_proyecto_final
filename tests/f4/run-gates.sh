@@ -111,10 +111,11 @@ echo "[F4.T-2 · BLOQUEANTE] Fila persistida en Postgres PE"
 TOTAL=$((TOTAL + 1))
 
 if [ -n "$CDT_UUID" ]; then
-  T2_COUNT=$(kubectl exec -n datos \
-    "$(kubectl get pod -n datos -l 'cnpg.io/cluster=postgres-pe,role=primary' \
-       -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)" -- \
-    psql -U app -d linea_verde -t -c \
+  PG_POD=$(kubectl get pod -n datos -l 'cnpg.io/cluster=postgres-pe,role=primary' \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  PG_PASS=$(kubectl get secret postgres-pe-app -n datos -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || echo "")
+  T2_COUNT=$(kubectl exec -n datos "$PG_POD" -- env PGPASSWORD="$PG_PASS" \
+    psql -h postgres-pe-rw -U app -d linea_verde -t -c \
     "SELECT count(*) FROM cdt.cdt WHERE id='${CDT_UUID}'::uuid;" 2>/dev/null \
     | tr -d ' ' || echo "ERR")
 
@@ -138,10 +139,8 @@ echo "[F4.T-3 · BLOQUEANTE] Fila en outbox creada en la misma transacción"
 TOTAL=$((TOTAL + 1))
 
 if [ -n "$CDT_UUID" ]; then
-  T3_COUNT=$(kubectl exec -n datos \
-    "$(kubectl get pod -n datos -l 'cnpg.io/cluster=postgres-pe,role=primary' \
-       -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)" -- \
-    psql -U app -d linea_verde -t -c \
+  T3_COUNT=$(kubectl exec -n datos "$PG_POD" -- env PGPASSWORD="$PG_PASS" \
+    psql -h postgres-pe-rw -U app -d linea_verde -t -c \
     "SELECT count(*) FROM cdt.outbox_cdt_eventos WHERE cdt_id='${CDT_UUID}'::uuid;" 2>/dev/null \
     | tr -d ' ' || echo "ERR")
 
@@ -165,14 +164,19 @@ echo "[F4.T-4 · BLOQUEANTE] Evento publicado en cdt.eventos en < 10s"
 TOTAL=$((TOTAL + 1))
 
 if [ -n "$CDT_UUID" ]; then
-  # Esperar hasta 10s para que el outbox-dispatcher procese la fila
-  sleep 3
+  # Esperar hasta 10s para que el outbox-dispatcher procese la fila.
+  # poll-interval=200ms + Kafka publish ack típicamente <100ms, pero con cluster bajo carga
+  # de los demás tests puede tomar varios segundos hasta que llegue al alta marca.
+  sleep 8
   RPK_POD=$(kubectl get pod -n asincrono -l 'app.kubernetes.io/name=redpanda' \
     -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
   if [ -n "$RPK_POD" ]; then
+    # Leer los últimos 200 mensajes (lee -200 en cada una de las 6 particiones,
+    # corta a num=200 globalmente) — suficiente para capturar el evento recién publicado.
+    # Sintaxis rpk: --offset -N (no @-N), --fetch-max-wait (no --timeout).
     T4_MSG=$(kubectl exec -n asincrono "$RPK_POD" -- \
-      rpk topic consume cdt.eventos --num 100 --timeout 7s 2>/dev/null \
+      rpk topic consume cdt.eventos --offset -200 --num 200 --fetch-max-wait 5s 2>/dev/null \
       | grep "$CDT_UUID" || echo "")
 
     if [ -n "$T4_MSG" ]; then
@@ -258,41 +262,32 @@ ACL_POD=$(kubectl get pod -n acl -l 'app.kubernetes.io/name=acl' \
   -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
 if [ -n "$ACL_POD" ]; then
-  echo "  Enviando 30 requests con error rate 0.6 al ACL..."
+  # Usamos error rate 1.0 (todas fallan) — con maxAttempts=3 en @Retry, una tasa <1.0
+  # sería absorbida (e.g. 0.6^3 ≈ 22% finales, no llega al 50% del CB).
+  # Con 1.0, todas las llamadas externas fallan → CB llena la sliding window y abre.
+  echo "  Enviando 30 requests con error rate 1.0 al ACL (todas deben fallar)..."
   for i in $(seq 1 30); do
     kubectl exec -n acl "$ACL_POD" -- curl -s -X POST \
       -H "Content-Type: application/json" \
-      -H "X-Stub-Error-Rate: 0.6" \
+      -H "X-Stub-Error-Rate: 1.0" \
       -d '{"cdtId":"00000000-0000-4000-8000-000000000001","clienteId":"t7","monto":100,"plazoDias":30,"tasaAnual":0.05,"pais":"pe"}' \
       "http://localhost:8080/acl/reservar" -o /dev/null 2>/dev/null || true
   done
 
   sleep 5  # Esperar a que el CB evalúe la ventana
 
-  CB_STATE=$(kubectl exec -n acl "$ACL_POD" -- \
-    curl -s "http://localhost:8080/actuator/metrics/resilience4j.circuitbreaker.state" 2>/dev/null \
-    | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    for m in d.get('measurements', []):
-        if m.get('statistic') == 'VALUE':
-            print(m.get('value', -1))
-            break
-except:
-    print(-1)
-" 2>/dev/null || echo "-1")
+  # Leer el state desde /actuator/prometheus (filtrado por state="open")
+  CB_OPEN_VAL=$(kubectl exec -n acl "$ACL_POD" -- \
+    curl -s "http://localhost:8080/actuator/prometheus" 2>/dev/null \
+    | grep 'resilience4j_circuitbreaker_state{' \
+    | grep 'name="core"' | grep 'state="open"' \
+    | awk '{print $NF}' | head -1 || echo "0.0")
 
-  # Estado 1.0 = OPEN en Resilience4j Micrometer
-  # Alternativamente verificar via /actuator/health
-  CB_HEALTH=$(kubectl exec -n acl "$ACL_POD" -- \
-    curl -s "http://localhost:8080/actuator/health" 2>/dev/null | grep -i "circuitbreaker\|OPEN" || echo "")
-
-  if echo "$CB_STATE" | grep -q "^1" || echo "$CB_HEALTH" | grep -qi "OPEN"; then
-    printf "  \033[1;32m✓ PASS\033[0m  CircuitBreaker OPEN detectado tras error rate 0.6\n"
+  if [ "${CB_OPEN_VAL%.*}" = "1" ]; then
+    printf "  \033[1;32m✓ PASS\033[0m  CircuitBreaker OPEN detectado tras error rate 0.6 (state=open value=%s)\n" "$CB_OPEN_VAL"
     PASS=$((PASS + 1))
   else
-    printf "  \033[1;31m✗ FAIL\033[0m  CB state=%s (esperado OPEN). ¿La ventana de 20 calls está completa?\n" "$CB_STATE"
+    printf "  \033[1;31m✗ FAIL\033[0m  CB state=open value=%s (esperado 1.0). ¿La ventana de 20 calls está completa?\n" "$CB_OPEN_VAL"
     FAIL_BLOCK=$((FAIL_BLOCK + 1))
   fi
 else
@@ -320,23 +315,23 @@ if [ -n "$ACL_POD" ]; then
     sleep 1
   done
 
-  CB_CLOSED=$(kubectl exec -n acl "$ACL_POD" -- \
-    curl -s "http://localhost:8080/actuator/health" 2>/dev/null \
-    | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    cb = d.get('components', {}).get('circuitBreakers', {}).get('details', {}).get('core', {})
-    print(cb.get('state', 'UNKNOWN'))
-except:
-    print('UNKNOWN')
-" 2>/dev/null || echo "UNKNOWN")
+  # Leer state="closed" y state="half_open" desde Prometheus (más confiable que health)
+  CB_CLOSED_VAL=$(kubectl exec -n acl "$ACL_POD" -- \
+    curl -s "http://localhost:8080/actuator/prometheus" 2>/dev/null \
+    | grep 'resilience4j_circuitbreaker_state{' \
+    | grep 'name="core"' | grep 'state="closed"' \
+    | awk '{print $NF}' | head -1 || echo "0.0")
+  CB_HALF_VAL=$(kubectl exec -n acl "$ACL_POD" -- \
+    curl -s "http://localhost:8080/actuator/prometheus" 2>/dev/null \
+    | grep 'resilience4j_circuitbreaker_state{' \
+    | grep 'name="core"' | grep 'state="half_open"' \
+    | awk '{print $NF}' | head -1 || echo "0.0")
 
-  if echo "$CB_CLOSED" | grep -qiE "CLOSED|HALF_OPEN"; then
-    printf "  \033[1;32m✓ PASS\033[0m  CB recuperado: estado=%s\n" "$CB_CLOSED"
+  if [ "${CB_CLOSED_VAL%.*}" = "1" ] || [ "${CB_HALF_VAL%.*}" = "1" ]; then
+    printf "  \033[1;32m✓ PASS\033[0m  CB recuperado: closed=%s half_open=%s\n" "$CB_CLOSED_VAL" "$CB_HALF_VAL"
     PASS=$((PASS + 1))
   else
-    printf "  \033[1;31m✗ FAIL\033[0m  CB aún OPEN tras 35s: estado=%s\n" "$CB_CLOSED"
+    printf "  \033[1;31m✗ FAIL\033[0m  CB no recuperó tras 35s: closed=%s half_open=%s\n" "$CB_CLOSED_VAL" "$CB_HALF_VAL"
     FAIL_BLOCK=$((FAIL_BLOCK + 1))
   fi
 else

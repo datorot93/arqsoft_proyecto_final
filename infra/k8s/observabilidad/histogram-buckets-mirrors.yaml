@@ -1,0 +1,79 @@
+# Espejos del ConfigMap histogram-buckets en los namespaces de aplicación.
+# FUENTE DE VERDAD: infra/k8s/observabilidad/histogram-buckets.yaml (namespace observabilidad)
+#
+# Limitación de Kubernetes: los ConfigMaps no son cross-namespace.
+# F4 (cdt-pais, acl, outbox-dispatcher, core-stub) monta el ConfigMap como volumen,
+# pero el pod solo puede referenciar CMs de su propio namespace.
+#
+# Solución: CMs espejo con el mismo contenido.
+# IMPORTANTE: si se actualiza histogram-buckets.yaml, actualizar también estos espejos.
+# En F7 (CI/CD), el pipeline verifica que los contenidos sean idénticos.
+#
+# Documentación: CLAUDE.md §"Reglas de diseño" + docs/experimento_asr.md §5.1
+
+# ============================================================
+# linea-verde (cdt-pais + outbox-dispatcher)
+# ============================================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: histogram-buckets
+  namespace: linea-verde
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    fuente-de-verdad: observabilidad/histogram-buckets
+  annotations:
+    descripcion: "Espejo de observabilidad/histogram-buckets. NO editar directamente."
+data:
+  buckets.json: |
+    [10, 25, 50, 100, 200, 400, 600, 800, 1000, 1500, 2500, 5000, 10000]
+  buckets_seconds.json: |
+    [0.01, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.5, 5.0, 10.0]
+  README: |
+    Espejo de observabilidad/histogram-buckets. Fuente de verdad: namespace observabilidad.
+    Buckets: 13 valores, 0.8s = umbral ASR-1.
+
+# ============================================================
+# acl
+# ============================================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: histogram-buckets
+  namespace: acl
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    fuente-de-verdad: observabilidad/histogram-buckets
+  annotations:
+    descripcion: "Espejo de observabilidad/histogram-buckets. NO editar directamente."
+data:
+  buckets.json: |
+    [10, 25, 50, 100, 200, 400, 600, 800, 1000, 1500, 2500, 5000, 10000]
+  buckets_seconds.json: |
+    [0.01, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.5, 5.0, 10.0]
+  README: |
+    Espejo de observabilidad/histogram-buckets. Fuente de verdad: namespace observabilidad.
+
+# ============================================================
+# core-stub
+# ============================================================
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: histogram-buckets
+  namespace: core-stub
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    fuente-de-verdad: observabilidad/histogram-buckets
+  annotations:
+    descripcion: "Espejo de observabilidad/histogram-buckets. NO editar directamente."
+data:
+  buckets.json: |
+    [10, 25, 50, 100, 200, 400, 600, 800, 1000, 1500, 2500, 5000, 10000]
+  buckets_seconds.json: |
+    [0.01, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.5, 5.0, 10.0]
+  README: |
+    Espejo de observabilidad/histogram-buckets. Fuente de verdad: namespace observabilidad.

@@ -1,0 +1,29 @@
+# ServiceMonitor para core-stub (CoreBancoZ stub).
+# Scrapea /actuator/prometheus en el namespace core-stub.
+# Permite observar la distribución de latencias Pareto inyectadas.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: core-stub
+  namespace: observabilidad
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: CoreBancoZStub
+spec:
+  namespaceSelector:
+    matchNames:
+      - core-stub
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core-stub
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: "15s"
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod

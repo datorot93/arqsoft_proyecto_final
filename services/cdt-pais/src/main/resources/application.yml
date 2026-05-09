@@ -1,0 +1,71 @@
+spring:
+  application:
+    name: cdt-pais
+  # Virtual threads — Java 21 + Spring Boot 3.3. NO WebFlux.
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # URL parametrizada por país. postgres-${LV_PAIS}-rw es el Service RW de CNPG.
+    # Ejemplo: postgres-pe-rw.datos.svc.cluster.local:5432/linea_verde
+    url: jdbc:postgresql://postgres-${LV_PAIS}-rw.datos.svc.cluster.local:5432/linea_verde
+    username: ${SPRING_DATASOURCE_USERNAME:app}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Pool de 20 conexiones por instancia. Alineado con max_connections del Postgres (100)
+      # y con el número máximo de instancias del HPA (20) → 20×20=400 > 100; ajustar si escala.
+      # Para el experimento local con 2 réplicas: 2×20=40 << 100. Correcto.
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 2000
+      validation-timeout: 1000
+      idle-timeout: 300000
+      max-lifetime: 600000
+      pool-name: cdt-pais-pool-${LV_PAIS}
+  # Jackson — formatear fechas como ISO-8601
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+# País de esta instancia — OBLIGATORIO setear LV_PAIS en el Deployment
+app:
+  pais: ${LV_PAIS}
+
+server:
+  port: 8080
+  # Tomcat con virtual threads (Spring Boot 3.3 lo activa con spring.threads.virtual.enabled)
+  tomcat:
+    accept-count: 100
+    max-connections: 8192
+
+management:
+  server:
+    port: 8080
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      # Labels globales en todas las métricas — usados por F3 dashboards y F6 análisis
+      pais: ${LV_PAIS}
+      phase: ${PHASE:baseline}
+      pod: ${POD_NAME:local}
+    distribution:
+      # Habilitar histogramas (los SLOs/buckets se configuran en MetricsConfig vía ConfigMap)
+      percentiles-histogram:
+        cdt_open_handler_duration_seconds: false
+        cdt_db_write_duration_seconds: false
+
+logging:
+  level:
+    co.bancoz.lineaverde: INFO
+    org.springframework.web: WARN
+    com.zaxxer.hikari: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

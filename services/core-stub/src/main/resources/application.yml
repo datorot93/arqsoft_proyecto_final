@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: core-stub
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+
+stub:
+  # Tasa de error por defecto (Bernoulli p). 0.0 = sin errores.
+  # Override por header X-Stub-Error-Rate en cada request.
+  error-rate-default: ${STUB_ERROR_RATE_DEFAULT:0.0}
+  # Semilla para el generador de números aleatorios (reproducibilidad en tests).
+  # -1 = semilla aleatoria basada en nanotime (comportamiento por defecto en experimento).
+  seed: ${SEED:-1}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      phase: ${PHASE:baseline}
+      pod: ${POD_NAME:local}
+
+logging:
+  level:
+    co.bancoz.lineaverde: INFO
+    org.springframework.web: WARN

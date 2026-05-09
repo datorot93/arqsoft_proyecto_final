@@ -1,0 +1,88 @@
+# ACL — Anti-Corruption Layer (subsistema Integracion).
+# Único punto de salida autorizado hacia core-stub.
+# NetworkPolicy acl-egress-to-core-and-broker (F1) refuerza esto a nivel de red.
+# Componente: AdaptadorCore + CircuitBreaker (diagrama componentes §Integracion).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acl
+  namespace: acl
+  labels:
+    app.kubernetes.io/name: acl
+    app.kubernetes.io/component: AdaptadorCore
+    app.kubernetes.io/part-of: linea-verde-experimento
+spec:
+  replicas: 1   # Sin HPA — la elasticidad se gestiona en cdt-pais
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: acl
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: acl
+        app.kubernetes.io/component: AdaptadorCore
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: acl
+          image: kind-registry:5000/linea-verde/acl:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PHASE
+              value: "baseline"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: HISTOGRAM_BUCKETS_PATH
+              value: "/etc/histogram-buckets/buckets_seconds.json"
+            # URL del core-stub hardcoded por diseño — el ACL es el único que la conoce
+            # La variable env solo existe para facilitar tests (no para override en prod)
+            - name: ACL_CORE_STUB_URL
+              value: "http://core-stub.core-stub.svc.cluster.local:8080"
+          volumeMounts:
+            - name: histogram-buckets
+              mountPath: /etc/histogram-buckets
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: histogram-buckets
+          configMap:
+            name: histogram-buckets
+      terminationGracePeriodSeconds: 30

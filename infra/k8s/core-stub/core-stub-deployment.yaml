@@ -1,0 +1,90 @@
+# core-stub — Stub del CoreBancoZ para el experimento.
+# INGRESO RESTRINGIDO a namespace acl (NetworkPolicy core-stub-ingress-from-acl-only).
+# Latencia: Pareto(xm=80ms, α=2.5). Errores: Bernoulli(p) configurable.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-stub
+  namespace: core-stub
+  labels:
+    app.kubernetes.io/name: core-stub
+    app.kubernetes.io/component: CoreBancoZStub
+    app.kubernetes.io/part-of: linea-verde-experimento
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core-stub
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core-stub
+        app.kubernetes.io/component: CoreBancoZStub
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: core-stub
+          image: kind-registry:5000/linea-verde/core-stub:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PHASE
+              value: "baseline"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: HISTOGRAM_BUCKETS_PATH
+              value: "/etc/histogram-buckets/buckets_seconds.json"
+            # Tasa de error por defecto (0.0 = sin errores en baseline)
+            - name: STUB_ERROR_RATE_DEFAULT
+              value: "0.0"
+            # Semilla aleatoria (-1 = basada en nanotime, no reproducible)
+            # Para tests deterministas: setear SEED=42 en el Deployment
+            - name: SEED
+              value: "-1"
+          volumeMounts:
+            - name: histogram-buckets
+              mountPath: /etc/histogram-buckets
+              readOnly: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /core/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: histogram-buckets
+          configMap:
+            name: histogram-buckets
+      terminationGracePeriodSeconds: 10

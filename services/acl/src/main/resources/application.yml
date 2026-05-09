@@ -1,0 +1,80 @@
+spring:
+  application:
+    name: acl
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+
+# URL del core-stub — hardcoded por diseño arquitectónico.
+# El ACL es el ÚNICO punto de salida hacia el core.
+# NetworkPolicies (F1) refuerzan esto a nivel de red.
+acl:
+  core-stub:
+    url: http://core-stub.core-stub.svc.cluster.local:8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      phase: ${PHASE:baseline}
+      pod: ${POD_NAME:local}
+
+# Resilience4j — configuración del CircuitBreaker "core"
+# Spec F4: slidingWindow COUNT_BASED de 20, threshold 50%, open wait 30s, half-open 3 calls
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        event-consumer-buffer-size: 10
+    instances:
+      core:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+
+  # Bulkhead — max 20 llamadas concurrentes al core
+  bulkhead:
+    instances:
+      core:
+        max-concurrent-calls: 20
+        max-wait-duration: 100ms
+
+  # Retry — máx 3 intentos, backoff exponencial × 2.0 con jitter
+  retry:
+    instances:
+      core:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2.0
+        exponential-max-wait-duration: 2s
+        # Jitter para evitar thundering herd
+        randomized-wait-factor: 0.5
+        retry-exceptions:
+          - org.springframework.web.client.HttpServerErrorException$ServiceUnavailable
+          - org.springframework.web.client.ResourceAccessException
+          - java.io.IOException
+
+logging:
+  level:
+    co.bancoz.lineaverde: INFO
+    io.github.resilience4j: INFO
+    org.springframework.web: WARN

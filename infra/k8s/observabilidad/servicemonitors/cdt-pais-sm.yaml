@@ -1,0 +1,32 @@
+# ServiceMonitor para cdt-pais (3 instancias: pe, mx, co).
+# Scrapea /actuator/prometheus en el namespace linea-verde.
+# P3 (cdt_open_handler_duration_seconds) y P4 (cdt_db_write_duration_seconds).
+# Label release: debe coincidir con el release name de kube-prometheus-stack (F3).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cdt-pais
+  namespace: observabilidad
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: CDTXPais
+spec:
+  namespaceSelector:
+    matchNames:
+      - linea-verde
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cdt-pais
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: "15s"
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_pais]
+          targetLabel: pais
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod

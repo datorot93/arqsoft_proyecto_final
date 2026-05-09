@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: outbox-dispatcher
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://postgres-${LV_PAIS}-rw.datos.svc.cluster.local:5432/linea_verde
+    username: ${SPRING_DATASOURCE_USERNAME:app}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5   # 1 réplica, polling secuencial — pool pequeño suficiente
+      minimum-idle: 2
+      connection-timeout: 2000
+      pool-name: outbox-pool-${LV_PAIS}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:redpanda.asincrono.svc.cluster.local:9093}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # acks=all para garantizar durabilidad antes de marcar published_at
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: "true"
+        max.in.flight.requests.per.connection: "1"
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      pais: ${LV_PAIS:local}
+      phase: ${PHASE:baseline}
+      pod: ${POD_NAME:local}
+
+# Intervalo de polling del outbox (ms)
+outbox:
+  poll-interval-ms: 200
+
+logging:
+  level:
+    co.bancoz.lineaverde: INFO
+    org.springframework.kafka: WARN
+    org.apache.kafka: WARN

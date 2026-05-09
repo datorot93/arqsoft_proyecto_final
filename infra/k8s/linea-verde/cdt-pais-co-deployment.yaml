@@ -1,0 +1,101 @@
+# cdt-pais — Deployment para Colombia (CO).
+# MISMA IMAGEN que pe/mx — solo cambia LV_PAIS y el Postgres de CO.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cdt-pais-co
+  namespace: linea-verde
+  labels:
+    app.kubernetes.io/name: cdt-pais
+    app.kubernetes.io/instance: cdt-pais-co
+    app.kubernetes.io/component: CDTXPais
+    app.kubernetes.io/part-of: linea-verde-experimento
+    pais: co
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: cdt-pais-co
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cdt-pais
+        app.kubernetes.io/instance: cdt-pais-co
+        app.kubernetes.io/component: CDTXPais
+        pais: co
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: cdt-pais
+          image: kind-registry:5000/linea-verde/cdt-pais:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LV_PAIS
+              value: "co"
+            - name: PHASE
+              value: "baseline"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: HISTOGRAM_BUCKETS_PATH
+              value: "/etc/histogram-buckets/buckets_seconds.json"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-co-app
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-co-app
+                  key: password
+          volumeMounts:
+            - name: histogram-buckets
+              mountPath: /etc/histogram-buckets
+              readOnly: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: histogram-buckets
+          configMap:
+            name: histogram-buckets
+      terminationGracePeriodSeconds: 30

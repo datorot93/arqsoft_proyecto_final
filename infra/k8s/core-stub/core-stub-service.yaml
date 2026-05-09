@@ -1,0 +1,19 @@
+# Service del core-stub — solo accesible desde acl (NetworkPolicy).
+apiVersion: v1
+kind: Service
+metadata:
+  name: core-stub
+  namespace: core-stub
+  labels:
+    app.kubernetes.io/name: core-stub
+    app.kubernetes.io/component: CoreBancoZStub
+    app.kubernetes.io/part-of: linea-verde-experimento
+spec:
+  selector:
+    app.kubernetes.io/name: core-stub
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP

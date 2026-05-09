@@ -30,6 +30,17 @@ observability-up: ## Instala kube-prometheus-stack + Tempo + Loki + OTel Collect
 observability-down: ## Desmonta F3 (deja F1 y F2 intactas)
 	@bash scripts/observability_teardown.sh
 
+##@ F4 — Servicios de aplicación Spring Boot
+
+services-build: ## Compila las 4 imágenes con Jib (carga a Docker daemon local)
+	@bash scripts/services_build.sh
+
+services-deploy: ## Aplica deployments + HPA + ServiceMonitors (asume imágenes cargadas)
+	@bash scripts/services_deploy.sh
+
+services-down: ## Borra los deployments F4 (deja F1+F2+F3 intactos)
+	@bash scripts/services_teardown.sh
+
 ##@ Pruebas (gates por fase)
 
 test-f1: ## Ejecuta los 9 tests del gate F1
@@ -40,6 +51,9 @@ test-f2: ## Ejecuta los 11 tests del gate F2
 
 test-f3: ## Ejecuta los 10 tests del gate F3
 	@bash tests/f3/run-gates.sh
+
+test-f4: ## Ejecuta los 13 tests del gate F4
+	@bash tests/f4/run-gates.sh
 
 ##@ Validación estática
 
@@ -61,4 +75,4 @@ clean: ## Borra artefactos generados localmente (mantiene fuentes)
 help: ## Muestra esta ayuda
 	@awk 'BEGIN {FS = ":.*##"; printf "\n\033[1mMakefile · Banco Z – Línea Verde\033[0m\n\nUso:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
 
-.PHONY: up down nuke platform-up platform-down observability-up observability-down test-f1 test-f2 test-f3 validate-manifests validate-versions clean help
+.PHONY: up down nuke platform-up platform-down observability-up observability-down services-build services-deploy services-down test-f1 test-f2 test-f3 test-f4 validate-manifests validate-versions clean help

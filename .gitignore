@@ -9,3 +9,17 @@ __pycache__/
 # Sistema
 .DS_Store
 *~
+
+# Java / Gradle (F4 — services/)
+**/build/
+**/.gradle/
+*.class
+*.jar
+!services/gradle/wrapper/gradle-wrapper.jar
+.idea/
+*.iml
+out/
+hs_err_pid*
+
+# Resultados de corridas (F6)
+runs/results/

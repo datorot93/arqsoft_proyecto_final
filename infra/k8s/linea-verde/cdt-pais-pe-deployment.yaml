@@ -1,0 +1,104 @@
+# cdt-pais — Deployment para Perú (PE).
+# UNA SOLA IMAGEN parametrizada por LV_PAIS=pe. T-12 verifica digest idéntico entre países.
+# Componente: CDTXPais (LineaVerde) — diagrama de componentes §8 subsistema LineaVerde.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cdt-pais-pe
+  namespace: linea-verde
+  labels:
+    app.kubernetes.io/name: cdt-pais
+    app.kubernetes.io/instance: cdt-pais-pe
+    app.kubernetes.io/component: CDTXPais
+    app.kubernetes.io/part-of: linea-verde-experimento
+    pais: pe
+spec:
+  replicas: 2   # HPA gestiona el escalado; mínimo 2 para HA
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: cdt-pais-pe
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cdt-pais
+        app.kubernetes.io/instance: cdt-pais-pe
+        app.kubernetes.io/component: CDTXPais
+        pais: pe
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: default
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: cdt-pais
+          image: kind-registry:5000/linea-verde/cdt-pais:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LV_PAIS
+              value: "pe"
+            - name: PHASE
+              value: "baseline"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: HISTOGRAM_BUCKETS_PATH
+              value: "/etc/histogram-buckets/buckets_seconds.json"
+            # Credenciales Postgres — copiadas desde datos/postgres-pe-app por services_deploy.sh
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-pe-app
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-pe-app
+                  key: password
+          volumeMounts:
+            - name: histogram-buckets
+              mountPath: /etc/histogram-buckets
+              readOnly: true
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12  # 60s máximo para arrancar
+      volumes:
+        - name: histogram-buckets
+          configMap:
+            name: histogram-buckets
+      terminationGracePeriodSeconds: 30

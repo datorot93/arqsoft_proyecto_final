@@ -1,0 +1,20 @@
+# Service del ACL — accesible desde linea-verde (cdt-pais) y observabilidad (scrape).
+# NetworkPolicy acl-ingress-from-linea-verde en F1 restringe el ingreso.
+apiVersion: v1
+kind: Service
+metadata:
+  name: acl
+  namespace: acl
+  labels:
+    app.kubernetes.io/name: acl
+    app.kubernetes.io/component: AdaptadorCore
+    app.kubernetes.io/part-of: linea-verde-experimento
+spec:
+  selector:
+    app.kubernetes.io/name: acl
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP

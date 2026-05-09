@@ -1,0 +1,29 @@
+# ServiceMonitor para el ACL (AdaptadorCore + CircuitBreaker).
+# Scrapea /actuator/prometheus en el namespace acl.
+# P6 (core_call_duration_seconds) y métricas de Resilience4j (CB states).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: acl
+  namespace: observabilidad
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: AdaptadorCore
+spec:
+  namespaceSelector:
+    matchNames:
+      - acl
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: acl
+  endpoints:
+    - port: http
+      path: /actuator/prometheus
+      interval: "15s"
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod

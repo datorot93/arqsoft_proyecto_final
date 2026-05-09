@@ -1,0 +1,113 @@
+# Grafana Loki + Promtail values — Experimento ASR-1/ASR-2, Banco Z – Línea Verde.
+# Chart: loki 6.18.0 (Loki 3.x)
+# Documentación: docs/experimento_asr.md §6.4.7, §6.1.4
+# Modo: SingleBinary (monolítico) — apropiado para kind local.
+# Storage: filesystem local con PVC 2Gi (StorageClass standard de kind).
+#
+# Bug catch #1 (F3): la estructura de values del chart Loki 6.18 requiere que
+#   loki.storage.type = "filesystem" para usar almacenamiento local.
+#   El storage.bucketNames es obligatorio solo para s3/gcs/azure.
+#   El commonConfig debe incluir storage.filesystem (no storage_config).
+#
+# Nota sobre PodSecurity: Promtail necesita leer /var/log (HostPath) y acceder
+# al socket del container runtime. El namespace observabilidad está configurado
+# como "privileged" en F1 para soportar este caso de uso.
+
+deploymentMode: SingleBinary
+
+# =============================================================
+# LOKI — configuración del servidor
+# =============================================================
+loki:
+  auth_enabled: false
+
+  image:
+    tag: "3.2.0"
+
+  # Storage filesystem — sin PVC en kind
+  storage:
+    type: filesystem
+
+  # Configuración de schema
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  # commonConfig: path para datos locales
+  commonConfig:
+    replication_factor: 1
+    storage:
+      filesystem:
+        chunks_directory: /var/loki/chunks
+        rules_directory: /var/loki/rules
+
+  # Limits cortos para corridas del experimento
+  limits_config:
+    retention_period: 24h
+    ingestion_rate_mb: 16
+    ingestion_burst_size_mb: 32
+    max_streams_per_user: 5000
+
+  # Sin ruler redundante (kube-prometheus-stack ya maneja alertas)
+  rulerConfig: {}
+
+  # ServiceMonitor para Prometheus
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+    interval: "30s"
+
+# =============================================================
+# SINGLE BINARY — réplicas y storage
+# =============================================================
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  persistence:
+    # Habilitar PVC pequeño — kind tiene StorageClass "standard" (hostpath) que
+    # provee almacenamiento local. Sin esto, /var/loki es read-only (Bug catch #2 F3).
+    enabled: true
+    size: 2Gi
+    storageClass: standard
+
+# =============================================================
+# MODOS DISTRIBUIDOS — desactivados para SingleBinary
+# =============================================================
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+# Gateway Nginx (solo modo distribuido)
+gateway:
+  enabled: false
+
+# =============================================================
+# PROMTAIL — agente de recolección de logs
+# =============================================================
+# Promtail se instala como chart separado en este setup.
+# El chart loki 6.18 no incluye Promtail como subchart en todos los casos.
+# Se desactiva aquí para evitar conflictos; el bootstrap script lo instala aparte.
+
+# =============================================================
+# CACHES — desactivados para minimizar recursos en kind
+# =============================================================
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false

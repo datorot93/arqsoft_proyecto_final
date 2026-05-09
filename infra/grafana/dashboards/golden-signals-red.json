@@ -1,0 +1,277 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.3.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "Golden Signals (RED) — ApiGateway (Kong) + CDTXPais. Puntos P2 y P3 del §5.2. Estratificado por país.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "ApiGateway (Kong) — Punto P2",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Tasa de solicitudes por segundo hacia CDTXPais, estratificado por país.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(kong_http_requests_total{route=~\"cdt.*\", pais=~\"$pais\"}[1m])) by (pais)",
+          "legendFormat": "rate — {{pais}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Rate — Solicitudes/s a CDT por país",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Porcentaje de errores 5xx y timeouts en Kong.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "id": 2,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(kong_http_requests_total{route=~\"cdt.*\", code=~\"5..\", pais=~\"$pais\"}[1m])) by (pais) / clamp_min(sum(rate(kong_http_requests_total{route=~\"cdt.*\", pais=~\"$pais\"}[1m])) by (pais), 0.001)",
+          "legendFormat": "error% — {{pais}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Errors — % errores 5xx por país",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Latencia P50/P95/P99 del upstream Kong → CDTXPais (punto P2). ATENCIÓN: siempre histogram_quantile, nunca avg().",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2 },
+          "color": { "mode": "palette-classic" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.4 },
+              { "color": "red", "value": 0.8 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum(rate(kong_upstream_latency_ms_bucket{pais=~\"$pais\"}[1m])) by (le, pais)) / 1000",
+          "legendFormat": "P50 — {{pais}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(kong_upstream_latency_ms_bucket{pais=~\"$pais\"}[1m])) by (le, pais)) / 1000",
+          "legendFormat": "P95 — {{pais}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(kong_upstream_latency_ms_bucket{pais=~\"$pais\"}[1m])) by (le, pais)) / 1000",
+          "legendFormat": "P99 — {{pais}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Duration P50/P95/P99 — Upstream Kong (P2)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "title": "CDTXPais — Punto P3 (handler de apertura por país)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Tasa de aperturas de CDT completadas (202 OK) vs total entrantes. Un gap indica pérdidas (AC-2.2).",
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
+      "id": 4,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(cdt_aperturas_completadas_total{pais=~\"$pais\"}[1m])) by (pais)",
+          "legendFormat": "completadas — {{pais}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(cdt_aperturas_entrantes_total{pais=~\"$pais\"}[1m])) by (pais)",
+          "legendFormat": "entrantes — {{pais}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Rate — Aperturas CDT completadas vs entrantes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Tasa de errores (5xx definitivos + timeouts sin retry exitoso) en CDTXPais.",
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(cdt_aperturas_perdidas_total{pais=~\"$pais\"}[1m])) by (pais) / clamp_min(sum(rate(cdt_aperturas_entrantes_total{pais=~\"$pais\"}[1m])) by (pais), 0.001)",
+          "legendFormat": "error% — {{pais}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Errors — % pérdidas CDT (AC-2.2)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "CRÍTICO: P95 de la duración del handler CDTXPais por país. La línea roja marca el umbral ASR-1 de 800 ms. Usa histogram_quantile sobre los buckets de histograma con le='0.8' obligatorio.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.4 },
+              { "color": "red", "value": 0.8 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
+      "id": 6,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum(rate(cdt_open_handler_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P50 — {{pais}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(cdt_open_handler_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P95 — {{pais}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(cdt_open_handler_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P99 — {{pais}}",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "vector(0.8)",
+          "legendFormat": "umbral ASR-1 (800 ms)",
+          "refId": "D"
+        }
+      ],
+      "title": "Duration P50/P95/P99 — CDTXPais handler (P3) — UMBRAL ASR-1",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["asr", "red", "cdt", "linea-verde"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(cdt_open_handler_duration_seconds_count, pais)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "pais",
+        "options": [],
+        "query": { "qryType": 1, "query": "label_values(cdt_open_handler_duration_seconds_count, pais)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "regex": "pe|mx|co",
+        "sort": 1,
+        "type": "query",
+        "label": "País"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(cdt_open_handler_duration_seconds_count, pod)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "pod",
+        "query": { "qryType": 1, "query": "label_values(cdt_open_handler_duration_seconds_count, pod)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "type": "query",
+        "label": "Pod"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "phase",
+        "options": [
+          { "selected": true, "text": "all", "value": "$__all" },
+          { "selected": false, "text": "warmup", "value": "warmup" },
+          { "selected": false, "text": "baseline", "value": "baseline" },
+          { "selected": false, "text": "peak", "value": "peak" }
+        ],
+        "query": "all,warmup,baseline,peak",
+        "type": "custom",
+        "label": "Fase"
+      }
+    ]
+  },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Golden Signals RED — ApiGateway + CDTXPais",
+  "uid": "lv-golden-signals-red",
+  "version": 1
+}

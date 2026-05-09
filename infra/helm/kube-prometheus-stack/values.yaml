@@ -1,0 +1,252 @@
+# kube-prometheus-stack values — Experimento ASR-1/ASR-2, Banco Z – Línea Verde.
+# Chart: kube-prometheus-stack 65.1.1 (Prometheus 2.55, Grafana 11.3, Alertmanager 0.27)
+# Documentación: docs/experimento_asr.md §6.4.7 y §6.1
+# Restricciones aplicadas:
+#   - Sin PV persistente (kind no garantiza storage estable entre reinicios)
+#   - Retención 7d — documento maestro §6.4.7
+#   - Scrape interval 15s para aplicación, 30s para infraestructura
+#   - Drop de métricas cAdvisor sin label "componente" (reduce cardinalidad ~40%)
+#   - Grafana en NodePort para acceso local sin port-forward permanente
+
+# =============================================================
+# PROMETHEUS
+# =============================================================
+prometheus:
+  prometheusSpec:
+    # Retención 7 días — documento maestro §6.4.7
+    retention: 7d
+    retentionSize: "8GB"
+
+    # Sin PV en kind — usar emptyDir para evitar PVCs que quedan Pending
+    storageSpec: {}
+
+    # Scrape interval global de infraestructura (30s)
+    # Los ServiceMonitors de aplicación sobrescriben a 15s localmente.
+    scrapeInterval: "30s"
+    evaluationInterval: "15s"
+
+    # Recolectar PrometheusRules con esta label (incluye nuestras asr-rules.yaml)
+    ruleSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+
+    # Scrapear ServiceMonitors de TODOS los namespaces del experimento
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+
+    # Recursos conservadores para kind (8GB RAM host)
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+    # Drop de métricas cAdvisor que no se usan en el experimento.
+    # Justificación: cAdvisor emite ~200 series por pod; solo usamos las que tienen
+    # label "componente" (aplicadas por el nodeSelector del experimento).
+    # Esto reduce ~35% la carga de ingestión en un cluster de 1 nodo.
+    additionalScrapeConfigs:
+      - job_name: "cAdvisor-filtered"
+        honor_timestamps: true
+        metrics_path: /metrics/cadvisor
+        scheme: https
+        tls_config:
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: (.+)
+            target_label: __address__
+            replacement: "${1}:10250"
+        metric_relabel_configs:
+          # Solo conservar métricas de pods del experimento (tienen label componente)
+          - source_labels: [container]
+            regex: ""
+            action: drop
+          # Drop de métricas cAdvisor de alta cardinalidad no usadas
+          - source_labels: [__name__]
+            regex: "container_network_tcp_usage_total|container_tasks_state|container_memory_failures_total|container_fs_reads_bytes_total|container_fs_writes_bytes_total|container_fs_io_time_seconds_total|container_fs_io_time_weighted_seconds_total"
+            action: drop
+
+# =============================================================
+# ALERTMANAGER
+# =============================================================
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    # Sin PV en kind
+    storage: {}
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ["alertname", "asr", "pais"]
+      group_wait: 10s
+      group_interval: 30s
+      repeat_interval: 1h
+      receiver: "default"
+      routes:
+        - matchers:
+            - asr = "ASR-1"
+          receiver: "asr-critical"
+          continue: false
+        - matchers:
+            - asr = "ASR-2"
+          receiver: "asr-critical"
+          continue: false
+    receivers:
+      - name: "default"
+        # Receiver vacío — en local no hay destino externo
+      - name: "asr-critical"
+        # En local: solo log. En OCI se configuraría OCI Notifications.
+        # Las alertas son verificables vía API de Alertmanager (T-8, T-9).
+
+# =============================================================
+# GRAFANA
+# =============================================================
+grafana:
+  enabled: true
+
+  # Imagen pinneada a Grafana 11.3 — documento maestro §6.4.10
+  image:
+    tag: "11.3.0"
+
+  # NodePort para acceso local sin port-forward permanente.
+  # Puerto fijo 30300 para que los scripts de gate puedan calcular la URL.
+  service:
+    type: NodePort
+    nodePort: 30300
+
+  adminPassword: "linea-verde-local"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Provisioning de dashboards: Grafana busca ConfigMaps con label grafana_dashboard=1
+  # en TODOS los namespaces. Los 4 dashboards del experimento se provisionan así.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: "observabilidad"
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+
+  # Datasource de Prometheus ya viene configurado por defecto en kube-prometheus-stack.
+  # Se personaliza para enriquecer la config con Tempo exemplars.
+  # IMPORTANTE: isDefault debe ser true aquí y false en additionalDataSources —
+  # solo puede haber UN datasource marcado como default por organización.
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          uid: "prometheus"
+          url: http://kube-prometheus-stack-prometheus.observabilidad.svc.cluster.local:9090
+          access: proxy
+          isDefault: true
+          jsonData:
+            timeInterval: "15s"
+            exemplarTraceIdDestinations:
+              - name: traceID
+                datasourceUid: "tempo"
+        - name: Tempo
+          type: tempo
+          uid: "tempo"
+          url: http://tempo.observabilidad.svc.cluster.local:3100
+          access: proxy
+          isDefault: false
+          jsonData:
+            tracesToLogsV2:
+              datasourceUid: "loki"
+              spanStartTimeShift: "-1m"
+              spanEndTimeShift: "1m"
+            tracesToMetrics:
+              datasourceUid: "prometheus"
+            serviceMap:
+              datasourceUid: "prometheus"
+            nodeGraph:
+              enabled: true
+            lokiSearch:
+              datasourceUid: "loki"
+        - name: Loki
+          type: loki
+          uid: "loki"
+          url: http://loki.observabilidad.svc.cluster.local:3100
+          access: proxy
+          isDefault: false
+
+# =============================================================
+# EXPORTERS (node-exporter + kube-state-metrics) — métricas P7
+# =============================================================
+nodeExporter:
+  enabled: true
+  # node-exporter es infraestructura → scrape 30s (heredado del global)
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 30m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: 30m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
+
+# =============================================================
+# DEFAULT RULES — conservar las de K8s, evitar duplicar ASR-*
+# =============================================================
+defaultRules:
+  create: true
+  rules:
+    # Desactivar las que ya cobramos nosotros o son redundantes en kind sin PV
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    # El resto de K8s alerts son útiles para detectar problemas de plataforma (P7)
+
+# =============================================================
+# COMPONENTES NO NECESARIOS EN LOCAL
+# =============================================================
+coreDns:
+  enabled: true
+kubeEtcd:
+  enabled: false   # kind no expone etcd externamente
+kubeScheduler:
+  enabled: false   # idem
+kubeControllerManager:
+  enabled: false   # idem
+kubeProxy:
+  enabled: false   # kind usa kindnet, no kube-proxy convencional

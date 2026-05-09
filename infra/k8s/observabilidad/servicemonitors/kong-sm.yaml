@@ -1,0 +1,35 @@
+# ServiceMonitor para Kong Gateway (componente ApiGateway / subsistema Borde).
+# Puerto: 8100 (/metrics) — el plugin Prometheus de Kong expone métricas aquí.
+# Scrape interval: 15s (aplicación / componente en la ruta crítica del ASR-1).
+# Documentación: docs/experimento_asr.md §6.4.5, §5.2 punto P2
+#
+# F2 deshabilitó serviceMonitor.enabled en el chart de Kong porque las CRDs de
+# kube-prometheus-stack no existían aún. Este manifiesto reemplaza esa funcionalidad
+# de forma declarativa (no requiere helm upgrade sobre Kong).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kong-metrics
+  namespace: observabilidad
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: ApiGateway
+spec:
+  # Scrapear el Service de Kong en el namespace borde
+  namespaceSelector:
+    matchNames:
+      - borde
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kong
+  endpoints:
+    - port: metrics      # puerto 8100 definido en kong/values.yaml
+      path: /metrics
+      interval: "15s"    # Aplicación en ruta crítica ASR-1
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_componente]
+          targetLabel: componente
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace

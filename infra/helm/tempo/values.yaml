@@ -1,0 +1,99 @@
+# Grafana Tempo values — Experimento ASR-1/ASR-2, Banco Z – Línea Verde.
+# Chart: tempo 1.13.0 (Tempo 2.6.x)
+# Documentación: docs/experimento_asr.md §6.4.7
+# Modo: single-binary (monolítico) — apropiado para kind local.
+# Backend: in-memory (memcached emulado / local disk efímero).
+# NO se usa para producción — en OCI se usaría Tempo distribuido con OCI Object Storage.
+
+tempo:
+  # Imagen pinneada a Tempo 2.6 — documento maestro §6.4.10
+  image:
+    tag: "2.6.1"
+
+  # Retención mínima para corridas locales (las trazas del experimento duran ~40 min por ronda)
+  retention: 24h
+
+  # Configuración de Tempo (se pasa como bloque YAML)
+  config: |
+    stream_over_http_enabled: true
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9095
+      log_level: warn
+
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+
+    ingester:
+      trace_idle_period: 10s
+      max_block_bytes: 1_000_000
+      max_block_duration: 5m
+
+    compactor:
+      compaction:
+        compaction_window: 1h
+        max_compaction_objects: 1000000
+        block_retention: 24h
+        compacted_block_retention: 10m
+
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/traces
+        wal:
+          path: /var/tempo/wal
+        pool:
+          max_workers: 100
+          queue_depth: 10000
+
+    # Búsqueda de trazas para Grafana Explore
+    search:
+      enabled: true
+      max_duration: 0s
+      result_limit: 20
+
+    # Metrics-generator para service graphs (integra con Prometheus)
+    metrics_generator:
+      registry:
+        external_labels:
+          source: tempo
+          cluster: linea-verde-local
+      storage:
+        path: /var/tempo/generator/wal
+        remote_write:
+          - url: http://kube-prometheus-stack-prometheus.observabilidad.svc.cluster.local:9090/api/v1/write
+            send_exemplars: true
+
+    overrides:
+      per_tenant_override_config: ""
+      metrics_generator_processors: [service-graphs, span-metrics]
+
+service:
+  type: ClusterIP
+  port: 3100
+
+persistence:
+  # Sin PV en kind — emptyDir efímero
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+# ServiceMonitor para que Prometheus scrape las métricas internas de Tempo
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack
+  interval: "30s"

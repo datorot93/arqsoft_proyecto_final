@@ -1,0 +1,411 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.3.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Cumplimiento ASR-1 y ASR-2. Curva de carga vs curva P95 con threshold visual a 800ms. Panel de veredicto por fase. Punto P1 del §5.2.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 200,
+      "title": "ASR-1 — Latencia (criterios AC-1.1, AC-1.2)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "PANEL PRINCIPAL: superpone la curva de carga (req/s, eje derecho) con la curva del P95 de latencia end-to-end minuto-a-minuto. La línea roja es el umbral ASR-1 de 800ms. Si el P95 cruza la línea roja, AC-1.1 falla. Sin el bucket le='0.8' en el histograma, esta curva NO sería precisa en la frontera del cumplimiento.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 5 },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "umbral ASR-1 (800 ms)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "dash": [10, 5], "fill": "dash" } },
+              { "id": "custom.lineWidth", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "guardrail P99 (1500 ms)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "dash": [5, 5], "fill": "dash" } }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 1 },
+      "id": 1,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_req_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P95 end-to-end — {{pais}} (P1)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(http_req_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P99 end-to-end — {{pais}} (P1)",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "vector(0.8)",
+          "legendFormat": "umbral ASR-1 (800 ms)",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "vector(1.5)",
+          "legendFormat": "guardrail P99 (1500 ms)",
+          "refId": "D"
+        }
+      ],
+      "title": "CUMPLIMIENTO ASR-1 — P95/P99 end-to-end vs umbral 800 ms (P1)",
+      "type": "timeseries",
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "P95 actual del ASR-1. Verde = cumple (<800ms). Rojo = viola AC-1.1.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.6 },
+              { "color": "red", "value": 0.8 }
+            ]
+          },
+          "mappings": []
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 11 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_req_duration_seconds_bucket{pais=~\"$pais\"}[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "title": "P95 actual (últimos 5 min)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "P99 actual — guardrail AC-1.2.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1.0 },
+              { "color": "red", "value": 1.5 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 11 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(http_req_duration_seconds_bucket{pais=~\"$pais\"}[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "title": "P99 actual — guardrail (1500 ms)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Porcentaje de solicitudes que violan el SLA de 800 ms. Debe ser ≤5% para que AC-1.1 sea equivalente a P95 < 800ms.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.03 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 11 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "1 - histogram_quantile(0.95, sum(rate(http_req_duration_seconds_bucket{pais=~\"$pais\"}[5m])) by (le)) / 0.8",
+          "refId": "A"
+        }
+      ],
+      "title": "latency_sla_violation_ratio (≤5%)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 },
+      "id": 201,
+      "title": "ASR-2 — Escalabilidad (criterios AC-2.1 a AC-2.6)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Curva de carga (req/s entrantes) superpuesta con P95 latencia. Permite ver el momento exacto en que el P95 cruza 800ms durante el pico. La correlación visual entre onset del pico y degradación de latencia es la evidencia clave del experimento.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2 },
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "req/s (carga)" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "right" },
+              { "id": "custom.axisLabel", "value": "Solicitudes/s" },
+              { "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 15 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "umbral ASR-1 (800 ms)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "dash": [10, 5], "fill": "dash" } }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_req_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P95 latencia — {{pais}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(cdt_aperturas_entrantes_total{pais=~\"$pais\"}[1m])) by (pais)",
+          "legendFormat": "req/s (carga) — {{pais}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "vector(0.8)",
+          "legendFormat": "umbral ASR-1 (800 ms)",
+          "refId": "C"
+        }
+      ],
+      "title": "CUMPLIMIENTO ASR-2 — Curva de carga vs P95 (momento en que P95 cruza 800ms)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Total acumulado de aperturas completadas (202 OK). Debe alcanzar ≥6000 al final de la ventana del ASR-2 (AC-2.1).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 6000 } ] } }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 26 },
+      "id": 6,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(cdt_aperturas_completadas_total{pais=~\"$pais\"}[20m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Aperturas completadas en 20min (≥6000 = AC-2.1)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Total de solicitudes perdidas (5xx definitivos + timeouts). Debe ser 0 (AC-2.2).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 26 },
+      "id": 7,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(cdt_aperturas_perdidas_total[20m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Aperturas perdidas (=0 = AC-2.2)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Mensajes en DLQ. Debe ser 0 (AC-2.4).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 26 },
+      "id": 8,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(kafka_topic_partition_current_offset{topic=\"cdt.eventos.DLQ\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Mensajes en DLQ (=0 = AC-2.4)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Replicas del HPA en el tiempo. Latencia entre replicas_pending y replicas_ready debe ser <60s (AC-2.5).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "id": 9,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"linea-verde\"}",
+          "legendFormat": "replicas actuales — {{horizontalpodautoscaler}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"linea-verde\"}",
+          "legendFormat": "replicas deseadas — {{horizontalpodautoscaler}}",
+          "refId": "B"
+        }
+      ],
+      "title": "HPA scaling — replicas actuales vs deseadas (AC-2.5)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "P95 minuto-a-minuto durante el pico del ASR-2. Debe ser <800ms en ≥18 de 20 minutos (AC-2.3). La tabla permite contar cuántos minutos viola el umbral.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.8 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "id": 10,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_req_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P95/min — {{pais}}",
+          "refId": "A"
+        }
+      ],
+      "title": "P95 minuto-a-minuto durante ASR-2 (≥18/20 min < 800ms = AC-2.3)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["asr", "compliance", "sla", "linea-verde", "asr1", "asr2"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "pais",
+        "options": [
+          { "selected": true, "text": "all", "value": "$__all" },
+          { "selected": false, "text": "pe", "value": "pe" },
+          { "selected": false, "text": "mx", "value": "mx" },
+          { "selected": false, "text": "co", "value": "co" }
+        ],
+        "query": "all,pe,mx,co",
+        "type": "custom",
+        "label": "País"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(http_req_duration_seconds_count, pod)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "pod",
+        "query": { "qryType": 1, "query": "label_values(http_req_duration_seconds_count, pod)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "type": "query",
+        "label": "Pod"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "phase",
+        "options": [
+          { "selected": true, "text": "all", "value": "$__all" },
+          { "selected": false, "text": "warmup", "value": "warmup" },
+          { "selected": false, "text": "baseline", "value": "baseline" },
+          { "selected": false, "text": "peak", "value": "peak" }
+        ],
+        "query": "all,warmup,baseline,peak",
+        "type": "custom",
+        "label": "Fase"
+      }
+    ]
+  },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "ASR Compliance — Latencia P95 vs 800ms",
+  "uid": "lv-asr-compliance",
+  "version": 1
+}

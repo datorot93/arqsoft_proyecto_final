@@ -1,0 +1,41 @@
+# ServiceMonitor para Apicurio Registry (Schema Registry / subsistema Asincrono).
+# Puerto: 8080 (/q/metrics — endpoint Quarkus/MicroProfile Metrics).
+# Scrape interval: 30s (infraestructura de soporte, no en la ruta crítica del P95).
+# Documentación: docs/experimento_asr.md §6.4.4
+#
+# F2 comentó el ServiceMonitor inline en infra/k8s/asincrono/apicurio.yaml.
+# Este manifiesto separado es el equivalente declarativo que F3 aplica directamente.
+# NO es necesario helm upgrade sobre Apicurio (es un Deployment puro, no Helm chart).
+#
+# La métrica más relevante de Apicurio en este experimento:
+#   apicurio_registry_rest_requests_total{method, status} — valida que el schema
+#   registry no se convierte en cuello de botella durante el pico del ASR-2.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: apicurio-metrics
+  namespace: observabilidad
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: SchemaRegistry
+spec:
+  namespaceSelector:
+    matchNames:
+      - asincrono
+  selector:
+    matchLabels:
+      app: apicurio
+  endpoints:
+    # Quarkus expone métricas en /q/metrics (MicroProfile Metrics + Micrometer)
+    - port: http
+      path: /q/metrics
+      interval: "30s"
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - targetLabel: componente
+          replacement: SchemaRegistry

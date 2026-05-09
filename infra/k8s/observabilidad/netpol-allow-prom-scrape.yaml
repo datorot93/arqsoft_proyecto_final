@@ -1,0 +1,115 @@
+# NetworkPolicies que permiten scraping cross-namespace por Prometheus.
+# Documentación: CLAUDE.md §Gotchas, .claude/specs/fase3_observabilidad.md
+#
+# Las NetworkPolicies de F1 (01-allows.yaml) ya incluyen:
+#   - Allow ingress desde observabilidad en: borde, linea-verde, datos, asincrono, acl, core-stub.
+#   - Allow egress hacia observabilidad en cada namespace.
+# Esas reglas cubren el ingreso. Esta sección cubre el EGRESO del pod Prometheus
+# hacia los namespaces de destino (ya que observabilidad no tiene default-deny,
+# pero sí necesitamos documentar las rutas de scrape explícitamente).
+#
+# Nota: el namespace observabilidad NO tiene default-deny (ver 01-network-policies/00-defaults.yaml,
+# comentario "observabilidad NO recibe default-deny: necesita scrapear todo el cluster libremente").
+# Por tanto, estas NPs son aditivas (refuerzo de documentación arquitectónica y OKE enforzará).
+
+# =================================================================
+# Allow egress desde observabilidad hacia cnpg-system (CNPG PodMonitor)
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cnpg-system-ingress-from-observabilidad
+  namespace: cnpg-system
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    gestionado-por: F3-observabilidad
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observabilidad
+      ports:
+        - protocol: TCP
+          port: 8080   # metrics del operador CNPG
+        - protocol: TCP
+          port: 9187   # postgres-exporter (PodMonitor de CNPG)
+
+# =================================================================
+# Allow egress desde observabilidad hacia asincrono (Redpanda + Apicurio)
+# (Ya existe en 01-allows.yaml, se documenta aquí para claridad)
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: asincrono-ingress-metrics-from-observabilidad
+  namespace: asincrono
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    gestionado-por: F3-observabilidad
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observabilidad
+      ports:
+        - protocol: TCP
+          port: 9644   # Redpanda admin (métricas)
+        - protocol: TCP
+          port: 8080   # Apicurio (Quarkus /q/metrics)
+        - protocol: TCP
+          port: 9090   # Redpanda metrics endpoint alternativo
+
+# =================================================================
+# Allow ingress en observabilidad desde borde/asincrono/datos/acl
+# para que los pods puedan enviar trazas OTLP al OTel Collector.
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observabilidad-ingress-otlp-from-app-namespaces
+  namespace: observabilidad
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    gestionado-por: F3-observabilidad
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: borde
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linea-verde
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: datos
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: asincrono
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: acl
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: core-stub
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: carga
+      ports:
+        - protocol: TCP
+          port: 4317   # OTLP gRPC
+        - protocol: TCP
+          port: 4318   # OTLP HTTP

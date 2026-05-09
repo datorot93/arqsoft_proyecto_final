@@ -1,0 +1,45 @@
+# FUENTE ÚNICA DE VERDAD DE BUCKETS DE HISTOGRAMA.
+# Documentación: docs/experimento_asr.md §5.1 + .claude/specs/fase3_observabilidad.md
+#
+# IMPORTANTE: F4 (spring-boot-developer) monta este ConfigMap como volumen y lee
+# buckets_seconds.json para configurar Micrometer. NUNCA duplicar los valores en
+# código de aplicación ni en ningún otro manifiesto. El hash SHA256 de data.buckets.json
+# es validado por el CI en F7 para detectar divergencias.
+#
+# Justificación de los buckets:
+#   - 800 ms = umbral ASR-1 (no negociable; sin él histogram_quantile(0.95) no es
+#     preciso en la frontera del cumplimiento)
+#   - Rango 10ms–10s cubre desde transacciones rápidas (cache hit) hasta timeouts
+#   - 13 buckets = densidad suficiente sin saturar la cardinalidad de Prometheus
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: histogram-buckets
+  namespace: observabilidad
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Observabilidad
+  annotations:
+    descripcion: "Buckets de histograma para latencia CDT. Referenciado por F4/Micrometer."
+data:
+  # Buckets en milisegundos (para documentación y para el pushgateway de prueba en T-5/T-8)
+  buckets.json: |
+    [10, 25, 50, 100, 200, 400, 600, 800, 1000, 1500, 2500, 5000, 10000]
+
+  # Buckets en segundos — formato que espera Micrometer/Prometheus
+  # F4 monta este archivo en /etc/histogram-buckets/buckets_seconds.json
+  buckets_seconds.json: |
+    [0.01, 0.025, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0, 1.5, 2.5, 5.0, 10.0]
+
+  # Descripción semántica para auditoría
+  README: |
+    Buckets del histograma de latencia del experimento ASR-1/ASR-2 (Banco Z – Línea Verde).
+
+    El bucket 0.8s (800 ms) es el umbral del ASR-1. Sin él, histogram_quantile(0.95, ...)
+    no produce un resultado preciso en la frontera del cumplimiento — la interpolación lineal
+    de Prometheus asume distribución uniforme dentro del bucket, lo que distorsiona el P95
+    cuando la mayoría de observaciones caen justo alrededor de 800 ms.
+
+    Referencia: docs/experimento_asr.md §5.1
+    Puntos de instrumentación que usan estos buckets: P3 (cdt_open_handler_duration),
+    P4 (cdt_db_write_duration), P6 (core_call_duration).

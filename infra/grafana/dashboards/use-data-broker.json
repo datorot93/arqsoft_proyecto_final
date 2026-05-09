@@ -1,0 +1,291 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.3.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "USE (Utilization, Saturation, Errors) — AlmacenCDTXPais (Postgres CNPG) y MessageBroker (Redpanda). Puntos P4, P5 y P7 del §5.2.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "AlmacenCDTXPais (PostgreSQL CNPG) — Punto P4",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Conexiones de base de datos activas vs máximo HikariCP (20 por pod). Saturación cuando se acerca a replicas × 20.",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "id": 1,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(cnpg_collector_pg_stat_activity_count{pais=~\"$pais\"}) by (pais)",
+          "legendFormat": "conexiones activas — {{pais}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(cnpg_collector_pg_stat_activity_count{pais=~\"$pais\", state=\"idle in transaction\"}) by (pais)",
+          "legendFormat": "idle in transaction — {{pais}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Utilization — Conexiones DB por país (P4)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Latencia de escritura en AlmacenCDTXPais (INSERT cdt + outbox en una transacción ACID). El bucket 0.8s permite detectar si la escritura contribuye al umbral ASR-1.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.1 },
+              { "color": "red", "value": 0.3 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "id": 2,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(cdt_db_write_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P95 write — {{pais}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(cdt_db_write_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P99 write — {{pais}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Duration P95/P99 — Escritura DB (P4)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Errores de base de datos: transacciones rollback, conflictos y deadlocks. Cualquier deadlock debe investigarse — indica contención entre shards o con el outbox.",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(cnpg_collector_pg_stat_database_xact_rollback{pais=~\"$pais\"}[1m])) by (pais)",
+          "legendFormat": "rollbacks/s — {{pais}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(cnpg_collector_pg_stat_database_deadlocks{pais=~\"$pais\"}[1m])) by (pais)",
+          "legendFormat": "deadlocks/s — {{pais}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Errors — Rollbacks y deadlocks DB (P4)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 101,
+      "title": "MessageBroker (Redpanda) — Puntos P5 y P7",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Throughput de producción y consumo en cdt.eventos (req/s). La brecha entre produce rate y consume rate es el lag acumulado.",
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
+      "id": 4,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(redpanda_kafka_request_bytes_total{request_type=\"produce\", topic=\"cdt.eventos\"}[1m]))",
+          "legendFormat": "produce bytes/s",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(redpanda_kafka_request_bytes_total{request_type=\"fetch\", topic=\"cdt.eventos\"}[1m]))",
+          "legendFormat": "consume bytes/s",
+          "refId": "B"
+        }
+      ],
+      "title": "Utilization — Throughput cdt.eventos (P5)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Consumer lag en cdt.eventos (mensajes pendientes de consumir). Un lag creciente durante el pico indica saturación del outbox dispatcher. El lag del outbox NO afecta la latencia del cliente (respuesta 202 ya fue enviada), pero SÍ afecta AC-2.4 si los mensajes van a DLQ.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 100 },
+              { "color": "red", "value": 1000 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(kafka_topic_partition_current_offset{topic=\"cdt.eventos\"}) - sum(kafka_consumergroup_current_offset{topic=\"cdt.eventos\"})",
+          "legendFormat": "consumer lag cdt.eventos",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "kafka_topic_partition_current_offset{topic=\"cdt.eventos.DLQ\"}",
+          "legendFormat": "DLQ offset (debe ser 0 — AC-2.4)",
+          "refId": "B"
+        }
+      ],
+      "title": "Saturation — Consumer lag + DLQ (P5/AC-2.4)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Métricas de plataforma del broker: CPU, memoria, y particiones bajo líder.",
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
+      "id": 6,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"asincrono\", container=\"redpanda\"}[1m])) by (pod)",
+          "legendFormat": "CPU — {{pod}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(container_memory_working_set_bytes{namespace=\"asincrono\", container=\"redpanda\"}) by (pod) / 1024 / 1024 / 1024",
+          "legendFormat": "RAM GiB — {{pod}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Utilization — Recursos Redpanda (P7)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 102,
+      "title": "Outbox dispatcher — Latencia de publicación (P5)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Latencia del outbox dispatcher (tiempo desde INSERT en DB hasta publish en Redpanda). Este camino es asíncrono y NO afecta el P95 del cliente, pero lag > 30s puede indicar saturación.",
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "id": 7,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(outbox_publish_duration_seconds_bucket{pais=~\"$pais\"}[1m])) by (le, pais))",
+          "legendFormat": "P95 outbox publish — {{pais}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "outbox_lag_seconds{pais=~\"$pais\"}",
+          "legendFormat": "outbox lag — {{pais}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Duration + Lag — Outbox dispatcher (P5)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["asr", "use", "postgres", "redpanda", "linea-verde"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(cdt_db_write_duration_seconds_count, pais)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "pais",
+        "query": { "qryType": 1, "query": "label_values(cdt_db_write_duration_seconds_count, pais)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "regex": "pe|mx|co",
+        "sort": 1,
+        "type": "query",
+        "label": "País"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(cdt_db_write_duration_seconds_count, pod)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "pod",
+        "query": { "qryType": 1, "query": "label_values(cdt_db_write_duration_seconds_count, pod)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "type": "query",
+        "label": "Pod"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "phase",
+        "options": [
+          { "selected": true, "text": "all", "value": "$__all" },
+          { "selected": false, "text": "warmup", "value": "warmup" },
+          { "selected": false, "text": "baseline", "value": "baseline" },
+          { "selected": false, "text": "peak", "value": "peak" }
+        ],
+        "query": "all,warmup,baseline,peak",
+        "type": "custom",
+        "label": "Fase"
+      }
+    ]
+  },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "USE — AlmacenCDTXPais + MessageBroker",
+  "uid": "lv-use-data-broker",
+  "version": 1
+}

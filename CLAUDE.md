@@ -102,7 +102,7 @@ Las 4 fases en `diagramas/concurrencia/*.drawio` siguen estas convenciones, ya a
 |------|:------:|------|--------------------------|
 | F1 — Bootstrap del cluster local (kind + namespaces + NetworkPolicies + quotas) | ✅ versionada | `.claude/specs/fase1_bootstrap_cluster.md` | `tests/f1/VERIFICACION.md` |
 | F2 — Plataforma de datos (3 Postgres+CNPG) y mensajería (Redpanda + Apicurio + Kong DB-less) | ✅ versionada | `.claude/specs/fase2_plataforma_datos_mensajeria.md` | `tests/f2/VERIFICACION.md` |
-| F3 — Observabilidad transversal | ⏳ pendiente | `.claude/specs/fase3_observabilidad.md` | — |
+| F3 — Observabilidad transversal | ✅ versionada | `.claude/specs/fase3_observabilidad.md` | `tests/f3/VERIFICACION.md` |
 | F4 — Servicios de aplicación Spring Boot | ⏳ | `.claude/specs/fase4_servicios_aplicacion.md` | — |
 | F5 — Generador de carga estocástico k6 | ⏳ | `.claude/specs/fase5_generador_carga.md` | — |
 | F6 — Ejecución y análisis | ⏳ | `.claude/specs/fase6_ejecucion_analisis.md` | — |
@@ -140,3 +140,7 @@ Aplicar al implementar fases siguientes — todos confirmados en runtime durante
 - **Recursos de monitoring (`PodMonitor`, `ServiceMonitor`) requieren las CRDs de kube-prometheus-stack** que F3 instala. En F2 deben estar deshabilitados (`monitoring.podMonitorEnabled: false` en CNPG, comentar `ServiceMonitor` en Apicurio, `serviceMonitor.enabled: false` en Kong). F3 los activa con `helm upgrade`.
 - **Los componentes que deshabilitan monitoring en F2** se reactivan en F3 vía `helm upgrade --reuse-values --set monitoring...=true`. NO crear archivos `*-monitor.yaml` separados — el patrón es `helm upgrade` sobre los releases existentes.
 - **El componente `outbox-dispatcher` (F4) NO existe en `componentes.jpeg`**. Es detalle de implementación del patrón Outbox y debe documentarse como tal en el commit. NO añadirlo al diagrama de componentes.
+- **Grafana 11.3 falla con "Only one datasource per default"** si `additionalDataSources` y `datasources` en el values de kube-prometheus-stack tienen ambos un datasource con `isDefault: true`. Poner TODOS los datasources en una sola sección `grafana.datasources.datasources.yaml` y marcar solo Prometheus como `isDefault: true`. Ver `infra/helm/kube-prometheus-stack/values.yaml`.
+- **Loki 3.x en SingleBinary necesita `singleBinary.persistence.enabled: true`** en kind. Sin PVC, `/var/loki` es read-only y Loki crashea en init. La StorageClass `standard` (hostpath) de kind provisiona PVCs automáticamente. Ver `infra/helm/loki/values.yaml`.
+- **La imagen otelcol-contrib es distroless** — no tiene wget, curl, ni shell. Para tests que necesiten acceder al Collector desde `kubectl exec`, usar otro pod del namespace (e.g., Grafana) que sí tenga herramientas de red.
+- **Los ServiceMonitors declarativos de F3** (`kong-sm.yaml`, `redpanda-sm.yaml`, `apicurio-sm.yaml`) son equivalentes al `helm upgrade --reuse-values --set serviceMonitor.enabled=true` documentado en CLAUDE.md. En la práctica el helm upgrade de Kong falla porque el campo del chart es diferente, y el SM declarativo en `infra/k8s/observabilidad/servicemonitors/` es más robusto. Se mantiene el `helm upgrade` en el bootstrap como primer intento con fallback al SM declarativo.

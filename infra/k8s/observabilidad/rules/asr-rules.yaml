@@ -1,0 +1,163 @@
+# PrometheusRule — Alertas obligatorias del experimento ASR-1/ASR-2.
+# Documentación: docs/experimento_asr.md §7 (criterios AC-*)
+#                .claude/specs/fase3_observabilidad.md §Alertas
+#
+# Estas 4 alertas NO chocan con las defaultRules del kube-prometheus-stack porque
+# usan nombres únicos con prefijo "ASR" y "Broker"/"CB" y métricas de aplicación,
+# no métricas de plataforma que ya tienen alertas default.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: asr-experiment-rules
+  namespace: observabilidad
+  labels:
+    # Esta label hace que el Prometheus del kube-prometheus-stack lo recoja.
+    # Debe coincidir con prometheus.prometheusSpec.ruleSelector en values.yaml.
+    app.kubernetes.io/part-of: linea-verde-experimento
+    release: kube-prometheus-stack
+    role: alert-rules
+spec:
+  groups:
+
+    # =========================================================
+    # Grupo 1 — ASR-1: Latencia (AC-1.1 / AC-2.3)
+    # =========================================================
+    - name: asr1.latencia
+      interval: 15s
+      rules:
+
+        # Alerta principal: P95 de la duración del handler CDTXPais supera 800 ms
+        # en ventana de 1 minuto. El bucket 0.8s en el histograma hace que esta
+        # expresión sea precisa en la frontera del ASR-1.
+        - alert: ASR1Violation
+          expr: |
+            histogram_quantile(
+              0.95,
+              sum(
+                rate(cdt_open_handler_duration_seconds_bucket[1m])
+              ) by (le, pais)
+            ) > 0.8
+          for: 1m
+          labels:
+            severity: critical
+            asr: ASR-1
+            experimento: linea-verde
+          annotations:
+            summary: "P95 de apertura CDT supera 800 ms (país: {{ $labels.pais }})"
+            description: |
+              El percentil 95 de cdt_open_handler_duration_seconds para el país
+              {{ $labels.pais }} es {{ $value | humanizeDuration }}, superando el
+              umbral de 800 ms del ASR-1 (AC-1.1).
+              Verificar: pool de conexiones HikariCP, latencia de Postgres, estado
+              del CircuitBreaker hacia el core stub.
+            runbook_url: "docs/experimento_asr.md#7-criterios-de-aceptacion"
+
+        # Guardrail interno: P99 no debe superar 1.5s (AC-1.2)
+        - alert: ASR1P99Guardrail
+          expr: |
+            histogram_quantile(
+              0.99,
+              sum(
+                rate(cdt_open_handler_duration_seconds_bucket[1m])
+              ) by (le, pais)
+            ) > 1.5
+          for: 2m
+          labels:
+            severity: warning
+            asr: ASR-1
+            experimento: linea-verde
+          annotations:
+            summary: "P99 de apertura CDT supera 1.5 s (país: {{ $labels.pais }})"
+            description: |
+              Guardrail interno AC-1.2: P99 = {{ $value | humanizeDuration }}.
+              Cola larga emergente — revisar HPA scaling lag o saturación de Postgres.
+
+    # =========================================================
+    # Grupo 2 — ASR-2: Escalabilidad / throughput (AC-2.1, AC-2.2)
+    # =========================================================
+    - name: asr2.escalabilidad
+      interval: 15s
+      rules:
+
+        # Alerta: throughput de aperturas completadas (202 OK) cae por debajo de
+        # la tasa de llegada durante más de 30 segundos → AC-2.2 en riesgo.
+        # Fórmula: si rate(completadas) < rate(total_entrantes) × 0.95 por 30s,
+        # el sistema está perdiendo solicitudes o acumulando cola no drenada.
+        - alert: ASR2VolumeShortfall
+          expr: |
+            (
+              rate(cdt_aperturas_completadas_total[30s])
+              /
+              clamp_min(rate(cdt_aperturas_entrantes_total[30s]), 0.001)
+            ) < 0.95
+          for: 30s
+          labels:
+            severity: critical
+            asr: ASR-2
+            experimento: linea-verde
+          annotations:
+            summary: "Throughput CDT por debajo del 95% de la tasa de llegada"
+            description: |
+              La tasa de aperturas completadas ({{ $value | humanizePercentage }}) está
+              por debajo del 95% de la tasa de llegada. Posibles causas: HPA frío,
+              pool de conexiones saturado, CircuitBreaker OPEN, o backpressure del broker.
+              Criterio AC-2.2: cdt_aperturas_perdidas_total debe ser 0.
+            runbook_url: "docs/experimento_asr.md#7-criterios-de-aceptacion"
+
+    # =========================================================
+    # Grupo 3 — Broker DLQ (AC-2.4)
+    # =========================================================
+    - name: broker.dlq
+      interval: 15s
+      rules:
+
+        # Cualquier mensaje en la DLQ invalida AC-2.4.
+        # La métrica se expone por Redpanda vía el admin port (9644)
+        # o por un job de exporter que lee el topic offset de cdt.eventos.DLQ.
+        - alert: BrokerDLQNonZero
+          expr: |
+            kafka_topic_partition_current_offset{topic="cdt.eventos.DLQ"} > 0
+          for: 0m
+          labels:
+            severity: critical
+            asr: ASR-2
+            experimento: linea-verde
+          annotations:
+            summary: "Mensajes detectados en cdt.eventos.DLQ"
+            description: |
+              Se detectaron {{ $value }} mensajes en la DLQ del broker.
+              El criterio AC-2.4 exige broker_dlq_messages_total = 0.
+              Investigar: fallos de serialización, errores del consumer ACL,
+              o retries agotados en el outbox dispatcher.
+            runbook_url: "docs/experimento_asr.md#7-criterios-de-aceptacion"
+
+    # =========================================================
+    # Grupo 4 — CircuitBreaker (AC-2.6)
+    # =========================================================
+    - name: circuit.breaker
+      interval: 15s
+      rules:
+
+        # El CB NO debe quedarse OPEN más de 90 s cuando el core stub está sano.
+        # Resilience4j expone resilience4j_circuitbreaker_state con values 0/1/2/3
+        # (CLOSED=0, OPEN=1, HALF_OPEN=2, DISABLED=3, FORCED_OPEN=4).
+        # La expresión detecta que el CB se ha mantenido en OPEN por más de 90 s.
+        - alert: CBOpenTooLong
+          expr: |
+            (
+              resilience4j_circuitbreaker_state{state="open"} == 1
+            )
+          for: 90s
+          labels:
+            severity: warning
+            asr: ASR-2
+            experimento: linea-verde
+          annotations:
+            summary: "CircuitBreaker {{ $labels.name }} lleva >90s en OPEN"
+            description: |
+              El CircuitBreaker {{ $labels.name }} (namespace {{ $labels.namespace }})
+              ha estado en estado OPEN durante más de 90 segundos.
+              Verificar: el core stub puede estar degradado. Revisar core_call_duration
+              y la tasa de errores Bernoulli inyectada.
+              Criterio AC-2.6: el CB debe abrir y recuperarse correctamente.
+            runbook_url: "docs/experimento_asr.md#7-criterios-de-aceptacion"

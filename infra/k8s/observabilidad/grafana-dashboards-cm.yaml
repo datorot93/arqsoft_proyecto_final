@@ -1,0 +1,41 @@
+# ConfigMap que provisiona los 4 dashboards Grafana vía el sidecar.
+# El sidecar de Grafana (kube-prometheus-stack) busca ConfigMaps con la label
+# grafana_dashboard=1 en el namespace observabilidad y los carga automáticamente.
+#
+# Este ConfigMap referencia los JSON de infra/grafana/dashboards/ usando kustomize
+# o el bootstrap script (que lee los archivos y los incrusta via kubectl create cm).
+# Los UIDs son estables (lv-*) para que los bookmarks de los operadores no se rompan.
+#
+# Los 4 dashboards cubren los 7 puntos P1-P7 del §5.2:
+#   golden-signals-red.json   → P2 (ApiGateway) y P3 (CDTXPais)
+#   use-data-broker.json      → P4 (DB write) y P5 (broker/outbox) y P7 (plataforma)
+#   circuit-breaker.json      → P6 (ACL/CB)
+#   asr-compliance.json       → P1 (end-to-end k6) + todos los AC-*
+#
+# El ConfigMap se crea en el bootstrap script con:
+#   kubectl create configmap grafana-dashboards \
+#     --from-file=golden-signals-red.json=infra/grafana/dashboards/golden-signals-red.json \
+#     --from-file=use-data-broker.json=infra/grafana/dashboards/use-data-broker.json \
+#     --from-file=circuit-breaker.json=infra/grafana/dashboards/circuit-breaker.json \
+#     --from-file=asr-compliance.json=infra/grafana/dashboards/asr-compliance.json \
+#     -n observabilidad \
+#     --dry-run=client -o yaml | kubectl apply -f -
+#
+# El campo de anotación grafana_folder agrupa los dashboards en la carpeta "LineaVerde".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: observabilidad
+  labels:
+    # Label que el sidecar de Grafana usa para descubrir dashboards
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: linea-verde-experimento
+    subsistema: Observabilidad
+  annotations:
+    # Folder destino en Grafana UI
+    grafana_folder: "LineaVerde"
+    descripcion: "4 dashboards del experimento ASR-1/ASR-2 — provisionados declarativamente"
+# data: incrustado por el bootstrap script desde infra/grafana/dashboards/*.json
+# NO editar manualmente — modificar los archivos JSON y re-ejecutar el bootstrap.
+data: {}

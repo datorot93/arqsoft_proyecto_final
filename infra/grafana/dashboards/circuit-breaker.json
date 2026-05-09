@@ -1,0 +1,304 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.3.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "Estados del CircuitBreaker Resilience4j en el ACL (AdaptadorCore). Punto P6 del §5.2. Criterio AC-2.6.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Estado actual del CircuitBreaker hacia CoreBancoZ. CLOSED=0 (OK), OPEN=1 (fallo), HALF_OPEN=2 (recuperación). El estado OPEN > 90s dispara la alerta CBOpenTooLong (AC-2.6).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "CLOSED", "color": "green" }, "1": { "text": "OPEN", "color": "red" }, "2": { "text": "HALF_OPEN", "color": "orange" }, "3": { "text": "DISABLED", "color": "blue" }, "4": { "text": "FORCED_OPEN", "color": "purple" } }, "type": "value" }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "max(resilience4j_circuitbreaker_state{name=~\"$cb_name\", state=\"open\"})",
+          "legendFormat": "OPEN",
+          "refId": "A"
+        }
+      ],
+      "title": "Estado CB — OPEN actual",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Número de veces que el CircuitBreaker ha transitado a OPEN durante el experimento. Correlaciona con los picos de error del core stub (Bernoulli p=2% en estado bursty).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(resilience4j_circuitbreaker_state_transition_total{name=~\"$cb_name\", to_state=\"open\"}[30m]))",
+          "legendFormat": "transiciones a OPEN (30m)",
+          "refId": "A"
+        }
+      ],
+      "title": "Count — Transiciones a OPEN",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Tasa de errores del CircuitBreaker (llamadas que resultaron en error o timeout).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "resilience4j_circuitbreaker_failure_rate{name=~\"$cb_name\"} / 100",
+          "legendFormat": "failure rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Failure Rate — CB (umbral de apertura)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Tiempo acumulado en estado OPEN. Documentado para AC-2.6.",
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "value" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(increase(resilience4j_circuitbreaker_slow_calls_seconds_sum{name=~\"$cb_name\", kind=\"failed\"}[30m]))",
+          "legendFormat": "seg en OPEN (aprox)",
+          "refId": "A"
+        }
+      ],
+      "title": "Tiempo acumulado en OPEN (AC-2.6)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+      "id": 100,
+      "title": "Historial de estados — punto P6",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Evolución temporal del estado del CB. Permite correlacionar apertura con picos de latencia en P3 y throughput en P5.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "lineWidth": 2, "fillOpacity": 20 },
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 7 },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "resilience4j_circuitbreaker_state{name=~\"$cb_name\", state=\"closed\"}",
+          "legendFormat": "CLOSED — {{name}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "resilience4j_circuitbreaker_state{name=~\"$cb_name\", state=\"open\"} * 2",
+          "legendFormat": "OPEN — {{name}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "resilience4j_circuitbreaker_state{name=~\"$cb_name\", state=\"half_open\"} * 1.5",
+          "legendFormat": "HALF_OPEN — {{name}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Estados CB a lo largo del tiempo (P6)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Latencia de las llamadas al core stub desde el ACL. P95 debe mantenerse con timeout < 2s (umbrales configurados en Resilience4j). La distribución Pareto del stub genera cola larga.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.5 },
+              { "color": "red", "value": 2.0 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 6,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.50, sum(rate(core_call_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "P50 core call",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum(rate(core_call_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "P95 core call",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum(rate(core_call_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "P99 core call",
+          "refId": "C"
+        }
+      ],
+      "title": "Duration P50/P95/P99 — Core call desde ACL (P6)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Tasa de llamadas exitosas vs fallidas vs rechazadas por el CB.",
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 7,
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(resilience4j_circuitbreaker_calls_total{name=~\"$cb_name\", kind=\"successful\"}[1m])) by (name)",
+          "legendFormat": "exitosas — {{name}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(resilience4j_circuitbreaker_calls_total{name=~\"$cb_name\", kind=\"failed\"}[1m])) by (name)",
+          "legendFormat": "fallidas — {{name}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(resilience4j_circuitbreaker_calls_total{name=~\"$cb_name\", kind=\"not_permitted\"}[1m])) by (name)",
+          "legendFormat": "rechazadas (CB OPEN) — {{name}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Rate — Llamadas exitosas/fallidas/rechazadas (P6)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["asr", "circuit-breaker", "acl", "resilience4j", "linea-verde"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(resilience4j_circuitbreaker_state, name)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "cb_name",
+        "query": { "qryType": 1, "query": "label_values(resilience4j_circuitbreaker_state, name)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "type": "query",
+        "label": "CircuitBreaker"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "pais",
+        "options": [
+          { "selected": true, "text": "all", "value": "$__all" },
+          { "selected": false, "text": "pe", "value": "pe" },
+          { "selected": false, "text": "mx", "value": "mx" },
+          { "selected": false, "text": "co", "value": "co" }
+        ],
+        "query": "all,pe,mx,co",
+        "type": "custom",
+        "label": "País"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(resilience4j_circuitbreaker_state, pod)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "pod",
+        "query": { "qryType": 1, "query": "label_values(resilience4j_circuitbreaker_state, pod)", "refId": "StandardVariableQuery" },
+        "refresh": 2,
+        "type": "query",
+        "label": "Pod"
+      },
+      {
+        "current": { "selected": false, "text": "all", "value": "$__all" },
+        "hide": 0,
+        "includeAll": true,
+        "multi": false,
+        "name": "phase",
+        "options": [
+          { "selected": true, "text": "all", "value": "$__all" },
+          { "selected": false, "text": "warmup", "value": "warmup" },
+          { "selected": false, "text": "baseline", "value": "baseline" },
+          { "selected": false, "text": "peak", "value": "peak" }
+        ],
+        "query": "all,warmup,baseline,peak",
+        "type": "custom",
+        "label": "Fase"
+      }
+    ]
+  },
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "CircuitBreaker — ACL hacia CoreBancoZ",
+  "uid": "lv-circuit-breaker",
+  "version": 1
+}

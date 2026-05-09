@@ -1,0 +1,396 @@
+# OpenTelemetry Collector — DaemonSet con sampling adaptativo.
+# Versión: 0.110.0 (otelcol-contrib) — documento maestro §6.4.10
+# Documentación: docs/experimento_asr.md §6.1.3
+#
+# Pipeline:
+#   Receivers:  OTLP/gRPC (4317) + OTLP/HTTP (4318)
+#   Processors: batch → tail_sampling (100% primeros 30s, 1% estable)
+#   Exporters:  otlp→Tempo (trazas) + prometheusremotewrite→Prometheus (métricas)
+#
+# Sampling adaptativo:
+#   - 100% los primeros 30s de cada corrida: diagnostica el onset abrupto del NHPP.
+#   - 1% en estado estable: evita saturar Tempo con 6000 trazas por ronda.
+#   - Configurable via env var OTEL_TAIL_SAMPLING_RATE (F5/F6 pueden ajustar).
+#
+# Nota PodSecurity: el namespace observabilidad está en enforce=privileged (F1).
+# El DaemonSet NO requiere privilegios especiales; el label privileged es para
+# Promtail (HostPath). Este collector solo abre puertos de red.
+
+---
+# ServiceAccount para el Collector
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: observabilidad
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: OtelCollector
+
+---
+# ClusterRole: el Collector necesita leer pods/nodes para enrichment de atributos
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: linea-verde-experimento
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "deployments", "daemonsets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: linea-verde-experimento
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: observabilidad
+
+---
+# ConfigMap con la configuración del Collector
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: observabilidad
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: linea-verde-experimento
+data:
+  otelcol.yaml: |
+    # OpenTelemetry Collector 0.110.0
+    # Banco Z – Línea Verde — pipeline de trazas y métricas adicionales
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+      pprof:
+        endpoint: 0.0.0.0:1777
+
+    receivers:
+      # OTLP sobre gRPC (puerto 4317) — preferido para Java OTel Agent
+      otlp/grpc:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            max_recv_msg_size_mib: 32
+
+      # OTLP sobre HTTP (puerto 4318) — usado por k6 y otel-cli para pruebas
+      otlp/http:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:4318
+            cors:
+              allowed_origins: ["*"]
+
+    processors:
+      # Batch: agrupa spans antes de enviar a Tempo para reducir overhead de red.
+      # Parámetros conservadores para kind (1 nodo).
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+
+      # Enriquecimiento de atributos K8s desde el pod donde corre el Collector
+      k8sattributes:
+        auth_type: serviceAccount
+        passthrough: false
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.namespace.name
+            - k8s.node.name
+          labels:
+            - tag_name: pais
+              key: pais
+              from: pod
+            - tag_name: componente
+              key: componente
+              from: pod
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.ip
+          - sources:
+              - from: connection
+
+      # Memory limiter: evita que el collector consuma toda la RAM del nodo
+      memory_limiter:
+        limit_mib: 256
+        spike_limit_mib: 64
+        check_interval: 5s
+
+      # Tail-based sampling: se aplica DESPUÉS de recibir toda la traza.
+      # Política 1 — Primeros 30s de la corrida: 100% (onset NHPP)
+      # Política 2 — Trazas con error: 100% siempre (no perder evidencia de fallos)
+      # Política 3 — Estado estable: 1%
+      #
+      # OTEL_TAIL_SAMPLING_RATE es configurable via env var en el DaemonSet.
+      # El tail_sampling processor de otelcol-contrib v0.110 usa decisión_wait=10s
+      # para esperar que lleguen todos los spans de la traza antes de decidir.
+      tail_sampling:
+        decision_wait: 10s
+        num_traces: 50000
+        expected_new_traces_per_sec: 100
+        policies:
+          # Política de alta prioridad: errores siempre
+          - name: sample-errors
+            type: status_code
+            status_code:
+              status_codes: [ERROR]
+          # Política de alta prioridad: latencia > 800ms (umbral ASR-1)
+          - name: sample-slow-traces
+            type: latency
+            latency:
+              threshold_ms: 800
+          # Política probabilística: 1% del resto (estado estable)
+          # F5/F6 pueden escalar esto a 100% vía env var o reiniciando el DS
+          - name: sample-default
+            type: probabilistic
+            probabilistic:
+              sampling_percentage: 1
+
+    exporters:
+      # Exportar trazas a Tempo via OTLP/gRPC
+      otlp/tempo:
+        endpoint: tempo.observabilidad.svc.cluster.local:9095
+        tls:
+          insecure: true
+        retry_on_failure:
+          enabled: true
+          initial_interval: 1s
+          max_interval: 30s
+          max_elapsed_time: 300s
+
+      # Exportar métricas adicionales (histogramas de spans) a Prometheus
+      # vía remote-write. Esto alimenta los paneles P2/P3/P6 del dashboard.
+      prometheusremotewrite:
+        endpoint: http://kube-prometheus-stack-prometheus.observabilidad.svc.cluster.local:9090/api/v1/write
+        tls:
+          insecure: true
+        resource_to_telemetry_conversion:
+          enabled: true
+
+      # Logging para debug (nivel warn en estable, info durante diagnóstico)
+      debug:
+        verbosity: basic
+        sampling_initial: 5
+        sampling_thereafter: 100
+
+    service:
+      extensions: [health_check, pprof]
+      pipelines:
+        # Pipeline de trazas: recibir → batch → tail_sampling → Tempo
+        traces:
+          receivers: [otlp/grpc, otlp/http]
+          processors: [memory_limiter, k8sattributes, batch, tail_sampling]
+          exporters: [otlp/tempo, debug]
+
+        # Pipeline de métricas: recibir métricas OTLP (de k6 vía xk6-output-otlp)
+        # y exportar a Prometheus remote-write
+        metrics:
+          receivers: [otlp/grpc, otlp/http]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [prometheusremotewrite, debug]
+
+      # Métricas del propio collector
+      telemetry:
+        metrics:
+          level: detailed
+          address: 0.0.0.0:8888
+        logs:
+          level: warn
+
+---
+# Service: expone los puertos OTLP a todos los namespaces del experimento
+# (los pods de F4 usan esta IP para enviar sus trazas).
+# Se usa ClusterIP — el DaemonSet expone por hostPort también (ver abajo).
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observabilidad
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: OtelCollector
+spec:
+  selector:
+    app.kubernetes.io/name: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    - name: metrics
+      port: 8888
+      targetPort: 8888
+      protocol: TCP
+    - name: health
+      port: 13133
+      targetPort: 13133
+      protocol: TCP
+  type: ClusterIP
+
+---
+# ServiceMonitor: Prometheus scrape las métricas internas del Collector
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector
+  namespace: observabilidad
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: linea-verde-experimento
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  namespaceSelector:
+    matchNames:
+      - observabilidad
+  endpoints:
+    - port: metrics
+      interval: "15s"
+      path: /metrics
+
+---
+# DaemonSet: 1 pod por nodo worker.
+# En kind de 1 nodo → 1/1 (ENV: en cluster de 3 workers → 3/3).
+# Los pods de aplicación (F4) se configuran con OTEL_EXPORTER_OTLP_ENDPOINT
+# apuntando al hostIP:4317 del nodo donde corren, o al Service ClusterIP.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector
+  namespace: observabilidad
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/version: "0.110.0"
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: OtelCollector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-collector
+        app.kubernetes.io/version: "0.110.0"
+        app.kubernetes.io/part-of: linea-verde-experimento
+        componente: OtelCollector
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: otel-collector
+      tolerations:
+        # Correr también en el control-plane en clusters de 1 nodo (kind local)
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+
+      containers:
+        - name: otelcol
+          # otelcol-contrib incluye el processor tail_sampling y el exporter prometheusremotewrite
+          image: otel/opentelemetry-collector-contrib:0.110.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config=/conf/otelcol.yaml"
+
+          env:
+            # Sampling rate configurable sin recrear el DaemonSet.
+            # F5/F6 pueden hacer: kubectl set env ds/otel-collector -n observabilidad
+            #   OTEL_TAIL_SAMPLING_RATE=100 (para corrida de diagnóstico completo)
+            - name: OTEL_TAIL_SAMPLING_RATE
+              value: "1"
+            # IP del nodo host (para k8sattributes y asociación de pods)
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: MY_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: MY_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              hostPort: 4317    # hostPort permite que los pods del nodo usen 127.0.0.1:4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              hostPort: 4318
+              protocol: TCP
+            - name: metrics
+              containerPort: 8888
+              protocol: TCP
+            - name: health
+              containerPort: 13133
+              protocol: TCP
+
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+              readOnly: true
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector-config
+
+      # Terminar en orden para no perder trazas en vuelo
+      terminationGracePeriodSeconds: 30

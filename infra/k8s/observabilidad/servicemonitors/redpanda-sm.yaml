@@ -1,0 +1,39 @@
+# ServiceMonitor para Redpanda (componente MessageBroker / subsistema Asincrono).
+# Puerto: 9644 (admin REST API de Redpanda — expone métricas Prometheus en /metrics).
+# Scrape interval: 15s (componente en ruta crítica del ASR-2: lag, throughput, DLQ).
+# Documentación: docs/experimento_asr.md §6.4.4, §5.2 punto P5
+#
+# Nota: el listener interno Kafka de Redpanda 24.2 es el puerto 9093.
+# Este ServiceMonitor usa el puerto admin 9644 (HTTP REST), que es diferente.
+# F2 deshabilitó monitoring.enabled en el chart de Redpanda. En F3 se activa
+# via helm upgrade --reuse-values --set monitoring.enabled=true (ver bootstrap script).
+# Este ServiceMonitor es una fallback declarativa en caso de que el helm upgrade falle.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redpanda-metrics
+  namespace: observabilidad
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: MessageBroker
+spec:
+  namespaceSelector:
+    matchNames:
+      - asincrono
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redpanda
+  endpoints:
+    # Admin REST port de Redpanda (expone /metrics en formato Prometheus)
+    - port: admin
+      path: /metrics
+      interval: "15s"
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_componente]
+          targetLabel: componente
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod

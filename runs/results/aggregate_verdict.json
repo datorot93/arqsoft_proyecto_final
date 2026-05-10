@@ -1,0 +1,303 @@
+{
+  "experiment_status": "EXPERIMENT PASSED",
+  "experiment_reason": "Las 5 ronda(s) v\u00e1lidas pasaron los 8 AC-* simult\u00e1neamente.",
+  "rounds_total": 5,
+  "rounds_valid": 5,
+  "rounds_invalid": 0,
+  "rounds_pass": 5,
+  "rounds_fail": 0,
+  "ac_frequency": {
+    "AC-1.1": {
+      "pass_count": 5,
+      "valid_count": 5,
+      "pass_ratio": 1.0,
+      "name": "P95 l\u00ednea base ASR-1"
+    },
+    "AC-1.2": {
+      "pass_count": 5,
+      "valid_count": 5,
+      "pass_ratio": 1.0,
+      "name": "P99 l\u00ednea base ASR-1 (guardrail)"
+    },
+    "AC-2.1": {
+      "pass_count": 5,
+      "valid_count": 5,
+      "pass_ratio": 1.0,
+      "name": "Volumen completado durante el pico ASR-2"
+    },
+    "AC-2.2": {
+      "pass_count": 5,
+      "valid_count": 5,
+      "pass_ratio": 1.0,
+      "name": "Aperturas perdidas durante el pico"
+    },
+    "AC-2.3": {
+      "pass_count": 5,
+      "valid_count": 5,
+      "pass_ratio": 1.0,
+      "name": "P95 sostenido durante el pico (minuto-a-minuto)"
+    },
+    "AC-2.4": {
+      "pass_count": 5,
+      "valid_count": 5,
+      "pass_ratio": 1.0,
+      "name": "DLQ \u2014 eventos hu\u00e9rfanos del outbox/broker"
+    },
+    "AC-2.5": {
+      "pass_count": 0,
+      "valid_count": 5,
+      "pass_ratio": 0.0,
+      "name": "Tiempo de escalado HPA (replicas pending \u2192 ready)"
+    },
+    "AC-2.6": {
+      "pass_count": 5,
+      "valid_count": 5,
+      "pass_ratio": 1.0,
+      "name": "CircuitBreaker recupera (no queda OPEN > 90 s con core sano)"
+    }
+  },
+  "p95_baseline_ms": {
+    "mean": 9.5,
+    "stdev": 0.0,
+    "min": 9.5,
+    "max": 9.5,
+    "n": 5
+  },
+  "p99_baseline_ms": {
+    "mean": 9.9,
+    "stdev": 0.0,
+    "min": 9.9,
+    "max": 9.9,
+    "n": 5
+  },
+  "peak_volume": {
+    "mean": 936,
+    "stdev": 403.7920256765851,
+    "min": 658,
+    "max": 1649,
+    "n": 5
+  },
+  "findings": [],
+  "rounds": [
+    {
+      "round_id": "r1778383101-s43-smoke",
+      "seed": 43,
+      "mode": "smoke",
+      "overall": "PASS",
+      "verdicts": {
+        "AC-1.1": {
+          "verdict": "PASS",
+          "value": "9.5 ms"
+        },
+        "AC-1.2": {
+          "verdict": "PASS",
+          "value": "9.9 ms"
+        },
+        "AC-2.1": {
+          "verdict": "PASS",
+          "value": 769
+        },
+        "AC-2.2": {
+          "verdict": "PASS",
+          "value": 0
+        },
+        "AC-2.3": {
+          "verdict": "PASS",
+          "value": "3/3 min con P95 < 800 ms"
+        },
+        "AC-2.4": {
+          "verdict": "PASS",
+          "value": {
+            "outbox_failures": 0,
+            "outbox_lag_s": 0.0,
+            "kafka_errors": 0
+          }
+        },
+        "AC-2.5": {
+          "verdict": "NA",
+          "value": "sin eventos de escalado detectados"
+        },
+        "AC-2.6": {
+          "verdict": "PASS",
+          "value": "0 caso(s)"
+        }
+      }
+    },
+    {
+      "round_id": "r1778383510-s42-smoke",
+      "seed": 42,
+      "mode": "smoke",
+      "overall": "PASS",
+      "verdicts": {
+        "AC-1.1": {
+          "verdict": "PASS",
+          "value": "9.5 ms"
+        },
+        "AC-1.2": {
+          "verdict": "PASS",
+          "value": "9.9 ms"
+        },
+        "AC-2.1": {
+          "verdict": "PASS",
+          "value": 839
+        },
+        "AC-2.2": {
+          "verdict": "PASS",
+          "value": 0
+        },
+        "AC-2.3": {
+          "verdict": "PASS",
+          "value": "3/3 min con P95 < 800 ms"
+        },
+        "AC-2.4": {
+          "verdict": "PASS",
+          "value": {
+            "outbox_failures": 0,
+            "outbox_lag_s": 0.0,
+            "kafka_errors": 0
+          }
+        },
+        "AC-2.5": {
+          "verdict": "NA",
+          "value": "sin eventos de escalado detectados"
+        },
+        "AC-2.6": {
+          "verdict": "PASS",
+          "value": "0 caso(s)"
+        }
+      }
+    },
+    {
+      "round_id": "r1778383851-s44-smoke",
+      "seed": 44,
+      "mode": "smoke",
+      "overall": "PASS",
+      "verdicts": {
+        "AC-1.1": {
+          "verdict": "PASS",
+          "value": "9.5 ms"
+        },
+        "AC-1.2": {
+          "verdict": "PASS",
+          "value": "9.9 ms"
+        },
+        "AC-2.1": {
+          "verdict": "PASS",
+          "value": 658
+        },
+        "AC-2.2": {
+          "verdict": "PASS",
+          "value": 0
+        },
+        "AC-2.3": {
+          "verdict": "PASS",
+          "value": "3/3 min con P95 < 800 ms"
+        },
+        "AC-2.4": {
+          "verdict": "PASS",
+          "value": {
+            "outbox_failures": 0,
+            "outbox_lag_s": 0.0,
+            "kafka_errors": 0
+          }
+        },
+        "AC-2.5": {
+          "verdict": "NA",
+          "value": "sin eventos de escalado detectados"
+        },
+        "AC-2.6": {
+          "verdict": "PASS",
+          "value": "0 caso(s)"
+        }
+      }
+    },
+    {
+      "round_id": "r1778384561-s45-smoke",
+      "seed": 45,
+      "mode": "smoke",
+      "overall": "PASS",
+      "verdicts": {
+        "AC-1.1": {
+          "verdict": "PASS",
+          "value": "9.5 ms"
+        },
+        "AC-1.2": {
+          "verdict": "PASS",
+          "value": "9.9 ms"
+        },
+        "AC-2.1": {
+          "verdict": "PASS",
+          "value": 1649
+        },
+        "AC-2.2": {
+          "verdict": "PASS",
+          "value": 0
+        },
+        "AC-2.3": {
+          "verdict": "PASS",
+          "value": "3/3 min con P95 < 800 ms"
+        },
+        "AC-2.4": {
+          "verdict": "PASS",
+          "value": {
+            "outbox_failures": 0,
+            "outbox_lag_s": 0.0,
+            "kafka_errors": 0
+          }
+        },
+        "AC-2.5": {
+          "verdict": "NA",
+          "value": "sin eventos de escalado detectados"
+        },
+        "AC-2.6": {
+          "verdict": "PASS",
+          "value": "0 caso(s)"
+        }
+      }
+    },
+    {
+      "round_id": "r1778384896-s46-smoke",
+      "seed": 46,
+      "mode": "smoke",
+      "overall": "PASS",
+      "verdicts": {
+        "AC-1.1": {
+          "verdict": "PASS",
+          "value": "9.5 ms"
+        },
+        "AC-1.2": {
+          "verdict": "PASS",
+          "value": "9.9 ms"
+        },
+        "AC-2.1": {
+          "verdict": "PASS",
+          "value": 765
+        },
+        "AC-2.2": {
+          "verdict": "PASS",
+          "value": 0
+        },
+        "AC-2.3": {
+          "verdict": "PASS",
+          "value": "3/3 min con P95 < 800 ms"
+        },
+        "AC-2.4": {
+          "verdict": "PASS",
+          "value": {
+            "outbox_failures": 0,
+            "outbox_lag_s": 0.0,
+            "kafka_errors": 0
+          }
+        },
+        "AC-2.5": {
+          "verdict": "NA",
+          "value": "sin eventos de escalado detectados"
+        },
+        "AC-2.6": {
+          "verdict": "PASS",
+          "value": "0 caso(s)"
+        }
+      }
+    }
+  ]
+}

@@ -98,6 +98,33 @@ test-f4: ## Ejecuta los 13 tests del gate F4
 test-f5: ## Ejecuta los 12 tests del gate F5
 	@bash tests/f5/run-gates.sh
 
+##@ F6 — Ejecución y análisis (veredicto AC-*)
+
+f6-round: ## Lanza UNA ronda (warmup+baseline+peak). Variables: SEED=42 MODE=smoke|scaled|full
+	@python3 runs/run_round.py --seed $${SEED:-42} --$${MODE:-scaled}
+
+f6-rounds: ## Lanza N=5 rondas con seeds 42..46 (mode=$${MODE:-scaled})
+	@for s in 42 43 44 45 46; do \
+		echo "=== ronda seed=$$s ==="; \
+		python3 runs/run_round.py --seed $$s --$${MODE:-scaled} || exit 1; \
+	done
+	@$(MAKE) f6-aggregate
+
+f6-aggregate: ## Genera aggregate.html sobre runs/results/r* (idempotente)
+	@python3 runs/aggregate_results.py runs/results/r*
+
+f6-report: ## Abre el último report.html en navegador (xdg-open / wsl-open)
+	@latest=$$(ls -dt runs/results/r*-s*-* 2>/dev/null | head -1); \
+	if [ -z "$$latest" ]; then echo "sin rondas"; exit 1; fi; \
+	report="$$latest/report.html"; \
+	echo "→ $$report"; \
+	if command -v wslview >/dev/null; then wslview "$$report"; \
+	elif command -v xdg-open >/dev/null; then xdg-open "$$report"; \
+	else echo "abrir manualmente: $$report"; fi
+
+test-f6: ## Ejecuta los 10 tests del gate F6 (inspección de la última ronda)
+	@bash tests/f6/run-gates.sh
+
 ##@ Validación estática
 
 validate-manifests: ## Valida los manifiestos K8s con --dry-run=client (no requiere cluster)

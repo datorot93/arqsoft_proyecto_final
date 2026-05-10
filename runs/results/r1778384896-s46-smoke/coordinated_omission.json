@@ -1,0 +1,20 @@
+{
+  "baseline": {
+    "phase": "baseline",
+    "target_rate_rps": 0.2,
+    "actual_rate_rps": 0.19062382849358564,
+    "ratio": 0.9531191424679282,
+    "threshold": 0.5,
+    "valid": true,
+    "reason": "arrival_rate (0.191 r/s) \u2265 50% del target (0.200 r/s) \u2014 sin coordinated omission"
+  },
+  "peak": {
+    "phase": "peak",
+    "target_rate_rps": 5.0,
+    "actual_rate_rps": 5.753362445839628,
+    "ratio": 1.1506724891679256,
+    "threshold": 0.85,
+    "valid": true,
+    "reason": "arrival_rate (5.753 r/s) \u2265 85% del target (5.000 r/s) \u2014 sin coordinated omission"
+  }
+}

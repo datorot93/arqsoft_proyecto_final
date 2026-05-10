@@ -1,0 +1,10 @@
+{
+  "round_id": "r1778384896-s46-smoke",
+  "seed": 46,
+  "mode": "smoke",
+  "scaled": true,
+  "overall_verdict": "PASS",
+  "overall_reason": "Los 8 AC-* pasaron en esta ronda. NA: AC-2.5.",
+  "started_at": 1778384896.7523758,
+  "ended_at": 1778385240.1076002
+}

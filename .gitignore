@@ -21,5 +21,9 @@ __pycache__/
 out/
 hs_err_pid*
 
-# Resultados de corridas (F6)
+# Resultados de corridas (F6) — los timestamps por ronda son efímeros.
+# El aggregate y un sample report se commitean explícitamente con git add -f.
 runs/results/
+
+# Lock interno de scheduled_tasks (no versionado)
+.claude/scheduled_tasks.lock

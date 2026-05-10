@@ -598,6 +598,12 @@ const { buildCountryAssigner } = __MOD__lib__dirichlet_js;
 const SEED = parseInt(__ENV.SEED || "42", 10);
 const KONG_URL = __ENV.KONG_URL || "http://kong-kong-proxy.borde.svc.cluster.local";
 const STAGE_GRANULARITY_S = parseInt(__ENV.PEAK_STAGE_S || "30", 10);
+// F6 fix retroactivo: permitir reescalar la duración del peak por env
+// (PEAK_DURATION). Si no se define, se usa PEAK_DURATION_S=1200 del modelo
+// NHPP (lib/nhpp.js). El escalado es proporcional — el modelo NHPP es
+// invariante a escala temporal cuando se preserva la fracción bursty del
+// MMPP (validación documentada en F5.T-3 y F6 VERIFICACION.md).
+const PEAK_DURATION_OVERRIDE_S = parseInt(__ENV.PEAK_DURATION || "0", 10);
 // VUs preallocated para pico: lambda_max * mmpp_max * margen
 //   12 r/s * 3 (bursty) * 5 (latency factor) = 180 VUs sería conservador.
 //   En kind 1-nodo apuntamos a 60 (≈ 1 segundo de queue máximo a P95 ~600ms).
@@ -611,12 +617,21 @@ const cdtPayloadSize = new Trend("cdt_payload_size_bytes");
 // ---------- Pre-generación determinista de stages ----------
 // Ejecutado al cargar el script — antes de setup().
 function buildStages(seed) {
+  // Duración efectiva: override del env si se proporciona (F6 escalado).
+  const effDuration = PEAK_DURATION_OVERRIDE_S > 0
+    ? PEAK_DURATION_OVERRIDE_S
+    : PEAK_DURATION_S;
+  // Reescala temporal: si la duración efectiva difiere, mapeamos
+  // `t_eff -> t_full = t_eff * (PEAK_DURATION_S / effDuration)` para conservar
+  // la forma de λ(t) y la trayectoria del MMPP.
+  const scale = PEAK_DURATION_S / effDuration;
   const mmpp = buildMMPP(seedFor(seed, "mmpp"), PEAK_DURATION_S);
   const stages = [];
-  for (let t = 0; t < PEAK_DURATION_S; t += STAGE_GRANULARITY_S) {
+  for (let t = 0; t < effDuration; t += STAGE_GRANULARITY_S) {
     const tMid = t + STAGE_GRANULARITY_S / 2;
-    const lambdaBase = lambdaAt(tMid);
-    const m = mmpp.multiplierAt(tMid);
+    const tFull = tMid * scale;
+    const lambdaBase = lambdaAt(tFull);
+    const m = mmpp.multiplierAt(tFull);
     // Tasa efectiva como entero (k6 exige int en `target`).
     const rate = Math.max(1, Math.round(lambdaBase * m));
     stages.push({ duration: `${STAGE_GRANULARITY_S}s`, target: rate });

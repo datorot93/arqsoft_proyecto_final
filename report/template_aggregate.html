@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>F6 Reporte agregado · {{ rounds_total }} rondas</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; margin: 32px; max-width: 1100px; color: #222; }
+  h1 { border-bottom: 3px solid #2C7BB6; padding-bottom: 8px; }
+  .verdict-banner { padding: 18px 22px; border-radius: 6px; font-size: 18px; font-weight: 600; margin: 18px 0; }
+  .v-pass { background: #d4edda; color: #155724; border-left: 6px solid #28a745; }
+  .v-fail { background: #f8d7da; color: #721c24; border-left: 6px solid #dc3545; }
+  .v-need { background: #fff3cd; color: #856404; border-left: 6px solid #ffc107; }
+  .v-other { background: #e2e3e5; color: #383d41; border-left: 6px solid #6c757d; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+  th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: center; }
+  th { background: #f0f4f8; }
+  td.pass { background: #d4edda; color: #155724; font-weight: 600; }
+  td.fail { background: #f8d7da; color: #721c24; font-weight: 600; }
+  td.error { background: #fff3cd; color: #856404; font-weight: 600; }
+  td.na { background: #e2e3e5; color: #383d41; }
+  td.invalid { background: #d8c8f0; color: #4a148c; font-weight: 600; }
+  .findings { background: #fff8e1; padding: 12px 16px; border-left: 4px solid #ff9800; border-radius: 4px; margin: 12px 0; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 12px 0; }
+  .stat-box { background: #f7f9fb; padding: 14px 18px; border-radius: 6px; }
+  .stat-value { font-size: 28px; font-weight: 700; color: #2C7BB6; }
+  .stat-label { font-size: 12px; color: #6c757d; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<h1>F6 — Veredicto agregado del experimento ASR</h1>
+
+<div class="verdict-banner v-{{ verdict_class }}">
+  {{ experiment_status }}<br>
+  <span style="font-size: 14px; font-weight: 400">{{ experiment_reason }}</span>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-box">
+    <div class="stat-value">{{ rounds_pass }}/{{ rounds_valid }}</div>
+    <div class="stat-label">Rondas PASS sobre válidas</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-value">
+      {% if p95_baseline_ms.mean is not none %}
+        {{ "%.1f"|format(p95_baseline_ms.mean) }} ± {{ "%.1f"|format(p95_baseline_ms.stdev) }} ms
+      {% else %}—{% endif %}
+    </div>
+    <div class="stat-label">P95 baseline (n={{ p95_baseline_ms.n }})</div>
+  </div>
+  <div class="stat-box">
+    <div class="stat-value">
+      {% if peak_volume.mean is not none %}{{ peak_volume.mean|int }}{% else %}—{% endif %}
+    </div>
+    <div class="stat-label">Volumen pico medio (n={{ peak_volume.n }})</div>
+  </div>
+</div>
+
+<h2>Tabla N rondas × 8 AC-*</h2>
+<table>
+  <tr>
+    <th>Ronda</th><th>Seed</th><th>Modo</th>
+    {% for ac in ac_order %}<th>{{ ac }}</th>{% endfor %}
+    <th>Veredicto</th>
+  </tr>
+  {% for r in rounds %}
+  <tr>
+    <td>{{ r.round_id|truncate(18, True, '…') }}</td>
+    <td>{{ r.seed }}</td>
+    <td>{{ r.mode or '?' }}</td>
+    {% for ac in ac_order %}
+      {% set vv = r.verdicts[ac].verdict|lower if r.verdicts[ac].verdict else 'na' %}
+      <td class="{{ vv }}">{{ r.verdicts[ac].verdict or '—' }}</td>
+    {% endfor %}
+    <td class="{{ r.overall|lower }}">{{ r.overall }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Frecuencia de PASS por criterio</h2>
+<table>
+  <tr><th>AC-*</th><th>Nombre</th><th>PASS / Válidas</th><th>Ratio</th></tr>
+  {% for ac in ac_order %}
+  <tr>
+    <td><strong>{{ ac }}</strong></td>
+    <td>{{ ac_frequency[ac].name }}</td>
+    <td>{{ ac_frequency[ac].pass_count }} / {{ ac_frequency[ac].valid_count }}</td>
+    <td>{{ "%.0f%%"|format(ac_frequency[ac].pass_ratio * 100) }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Distribución P95/P99 por ronda</h2>
+<div>{{ plot_p95|safe }}</div>
+
+{% if findings %}
+<h2>Hallazgos arquitectónicos (mapeo §4.4)</h2>
+<div class="findings">
+  <p>Cada falla se asocia a una hipótesis arquitectónica del documento maestro y a un componente sospechoso. La columna "ticket de rediseño" debe abrirse contra el componente.</p>
+  <table>
+    <tr><th>Ronda</th><th>Seed</th><th>AC-*</th><th>Hipótesis refutada</th><th>Componente sospechoso</th></tr>
+    {% for f in findings %}
+    <tr>
+      <td>{{ f.round_id|truncate(18, True, '…') }}</td>
+      <td>{{ f.seed }}</td>
+      <td><strong>{{ f.ac }}</strong></td>
+      <td>{{ f.hypothesis_refuted }}</td>
+      <td>{{ f.suspect_component }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<p style="font-size: 11px; color: #999; margin-top: 32px;">
+  F6 · Línea Verde · agregado generado {{ generated_at }}
+  &nbsp;·&nbsp; Regla del veredicto: 5/5 PASS o falla (documento maestro §9).
+</p>
+
+</body>
+</html>

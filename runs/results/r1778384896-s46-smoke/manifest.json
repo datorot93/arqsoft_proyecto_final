@@ -1,0 +1,71 @@
+{
+  "round_id": "r1778384896-s46-smoke",
+  "seed": 46,
+  "scaled": true,
+  "git_sha": "014ac07afef9b3170003bac168a2910951bb8834",
+  "experiment_spec_sha": "918063cef27c4f6f2ba9a89601102e11a6783d617ac2865f697aff59595b425c",
+  "versions": {
+    "KIND_VERSION": "v0.23.0",
+    "KIND_NODE_IMAGE": "kindest/node:v1.30.4",
+    "KIND_CLUSTER_NAME": "linea-verde",
+    "KUBECTL_VERSION": "v1.30.4",
+    "HELM_VERSION": "v3.15.4",
+    "CNPG_CHART_VERSION": "0.21.6              # CloudNativePG operator chart",
+    "POSTGRES_IMAGE_VERSION": "16.4             # ghcr.io/cloudnative-pg/postgresql:16.4",
+    "REDPANDA_OPERATOR_VERSION": "v2.2.4",
+    "REDPANDA_VERSION": "v24.2.7",
+    "APICURIO_REGISTRY_VERSION": "3.0.4",
+    "KONG_CHART_VERSION": "2.41.1               # Kong Gateway 3.7 OSS",
+    "KUBE_PROMETHEUS_STACK_VERSION": "65.1.1    # Prometheus 2.55, Grafana 11.3, Alertmanager 0.27",
+    "TEMPO_CHART_VERSION": "1.13.0              # Tempo 2.6",
+    "LOKI_CHART_VERSION": "6.18.0               # Loki 3.x",
+    "PROMTAIL_CHART_VERSION": "6.16.6           # Promtail 3.2.x \u2014 par con Loki 3.2.0",
+    "OTEL_COLLECTOR_VERSION": "0.110.0",
+    "METRICS_SERVER_CHART_VERSION": "3.12.2     # metrics-server 0.7.2",
+    "JAVA_VERSION": "21",
+    "SPRING_BOOT_VERSION": "3.3.5",
+    "RESILIENCE4J_VERSION": "2.2.0",
+    "GRADLE_VERSION": "8.10",
+    "JIB_VERSION": "3.4.4",
+    "TEMURIN_BASE_IMAGE": "eclipse-temurin:21-jre-jammy",
+    "K6_VERSION": "v0.53.0",
+    "K6_OPERATOR_VERSION": "0.0.16",
+    "TERRAFORM_VERSION": "1.9.6",
+    "OCI_PROVIDER_VERSION": "6.10.0"
+  },
+  "started_at": 1778384896.7523758,
+  "ended_at": 1778385240.1076002,
+  "warmup": {
+    "name": "warmup",
+    "started_at": 1778384899.0,
+    "ended_at": 1778384962.0,
+    "duration_s": 63.0,
+    "testrun_name": "k6-warmup-s46-1778384896",
+    "notes": ""
+  },
+  "baseline": {
+    "name": "baseline_asr1",
+    "started_at": 1778384967.0,
+    "ended_at": 1778385100.0,
+    "duration_s": 133.0,
+    "testrun_name": "k6-baseline-s46-1778384896",
+    "notes": ""
+  },
+  "peak": {
+    "name": "peak_asr2",
+    "started_at": 1778385106.0,
+    "ended_at": 1778385239.0,
+    "duration_s": 133.0,
+    "testrun_name": "k6-peak-s46-1778384896",
+    "notes": ""
+  },
+  "config": {
+    "mode": "smoke",
+    "warmup": 30,
+    "baseline": 120,
+    "peak": 120,
+    "warmup_rate": 2,
+    "baseline_target_rps": 0.2,
+    "peak_volume_threshold": 600
+  }
+}

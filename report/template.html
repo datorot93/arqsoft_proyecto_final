@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>F6 Reporte ASR · Ronda {{ round_id }}</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; margin: 32px; max-width: 1100px; color: #222; }
+  h1 { border-bottom: 3px solid #2C7BB6; padding-bottom: 8px; }
+  h2 { color: #2C7BB6; margin-top: 28px; }
+  .header { background: #f7f9fb; padding: 14px 18px; border-left: 4px solid #2C7BB6; }
+  .verdict-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .badge { padding: 4px 10px; border-radius: 14px; font-weight: 600; font-size: 12px; }
+  .badge-pass { background: #28a745; color: white; }
+  .badge-fail { background: #dc3545; color: white; }
+  .badge-na { background: #6c757d; color: white; }
+  .badge-error { background: #ffc107; color: #333; }
+  .badge-invalid { background: #6610f2; color: white; }
+  .ac-section { border: 1px solid #e0e6eb; border-radius: 8px; padding: 14px 18px; margin-bottom: 18px; }
+  .ac-section.fail { border-left: 6px solid #dc3545; background: #fff5f5; }
+  .ac-section.pass { border-left: 6px solid #28a745; }
+  .ac-section.na { border-left: 6px solid #6c757d; }
+  .ac-section.error { border-left: 6px solid #ffc107; }
+  .ac-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .ac-id { font-size: 11px; color: #6c757d; letter-spacing: 1px; }
+  .reason { color: #555; font-size: 14px; line-height: 1.5; margin: 8px 0; }
+  table.compact { border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+  table.compact td, table.compact th { border: 1px solid #ddd; padding: 4px 10px; }
+  table.compact th { background: #f0f4f8; }
+  .findings { background: #fff8e1; padding: 10px 14px; border-left: 4px solid #ff9800; border-radius: 4px; margin-top: 8px; font-size: 13px; }
+  .plot { margin: 8px 0; }
+  .meta { font-size: 11px; color: #999; }
+  pre.json { background: #f0f4f8; padding: 8px; border-radius: 4px; font-size: 12px; max-height: 200px; overflow: auto; }
+</style>
+</head>
+<body>
+
+<h1>Reporte F6 — Validación ASR-1 / ASR-2 · Ronda {{ round_id }}</h1>
+
+<div class="header">
+  <strong>Veredicto general:</strong>
+  <span class="badge badge-{{ overall_class }}">{{ overall }}</span>
+  <br><strong>Razón:</strong> {{ overall_reason }}
+  <br><strong>Seed:</strong> {{ seed }}
+  &nbsp; <strong>Modo:</strong> {{ mode }}
+  &nbsp; <strong>Spec SHA:</strong> <code>{{ experiment_spec_sha[:12] }}…</code>
+  &nbsp; <strong>Git:</strong> <code>{{ git_sha[:8] }}</code>
+</div>
+
+<h2>Coordinated omission</h2>
+<table class="compact">
+  <tr><th>Fase</th><th>Target r/s</th><th>Observado r/s</th><th>Ratio</th><th>Veredicto</th><th>Razón</th></tr>
+  {% for phase, co in coordinated_omission.items() %}
+  <tr>
+    <td>{{ phase }}</td>
+    <td>{{ "%.3f"|format(co.target_rate_rps) }}</td>
+    <td>{{ "%.3f"|format(co.actual_rate_rps) }}</td>
+    <td>{{ "%.1f%%"|format(co.ratio * 100) }}</td>
+    <td><span class="badge badge-{{ 'pass' if co.valid else 'invalid' }}">{{ 'VALID' if co.valid else 'INVALID' }}</span></td>
+    <td>{{ co.reason }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Veredictos AC-* — los 8 criterios del §7</h2>
+
+{% for ac in ac_order %}
+{% set v = verdicts[ac] %}
+<section class="ac-section {{ v.verdict|lower }}">
+  <div class="ac-header">
+    <h3 style="margin:0">{{ ac }} — {{ v.name }}</h3>
+    <span class="badge badge-{{ v.verdict|lower }}">{{ v.verdict }}</span>
+  </div>
+  <div class="reason"><strong>Valor:</strong> {{ v.value }}<br>
+    <strong>Umbral:</strong> {{ v.threshold }}<br>
+    <strong>Razón:</strong> {{ v.reason }}</div>
+  {% if v.stratified.by_pais %}
+  <table class="compact">
+    <tr><th>País</th>{% for k in v.stratified.by_pais %}<td>{{ k }}</td>{% endfor %}</tr>
+    <tr><th>Valor</th>{% for k, val in v.stratified.by_pais.items() %}<td>{{ val }}</td>{% endfor %}</tr>
+  </table>
+  {% endif %}
+  {% if v.verdict == 'FAIL' and v.hypothesis_refuted %}
+    <div class="findings">
+      <strong>Hipótesis refutada (§4.4):</strong> {{ v.hypothesis_refuted }}<br>
+      <strong>Componente sospechoso:</strong> {{ v.suspect_component }}
+    </div>
+  {% endif %}
+</section>
+{% endfor %}
+
+<h2>Gráficos</h2>
+
+<h3>Perfil de carga observado</h3>
+<div class="plot">{{ plot_load|safe }}</div>
+
+<h3>P95 minuto-a-minuto durante el peak (AC-2.3)</h3>
+<div class="plot">{{ plot_p95_min|safe }}</div>
+
+<h3>P95 estratificado por país (Dirichlet)</h3>
+<div class="plot">{{ plot_p95_pais|safe }}</div>
+
+<h3>HPA current vs desired (AC-2.5)</h3>
+<div class="plot">{{ plot_hpa|safe }}</div>
+
+<h3>CircuitBreaker — estado OPEN durante la ronda (AC-2.6)</h3>
+<div class="plot">{{ plot_cb|safe }}</div>
+
+<h2>Manifest</h2>
+<pre class="json">{{ manifest_json }}</pre>
+
+<p class="meta">
+  F6 · Línea Verde · {{ generated_at }}
+  &nbsp;·&nbsp; Documento maestro: <code>docs/experimento_asr.md</code> §7 (criterios AC-*) y §4.4 (hipótesis).
+</p>
+
+</body>
+</html>

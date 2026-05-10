@@ -1,0 +1,16 @@
+{
+  "name": "linea-verde-load",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generador de carga estocástico (k6 + tests Node) para el experimento ASR-1/ASR-2 — Banco Z Línea Verde.",
+  "type": "module",
+  "scripts": {
+    "test:nhpp": "node test/validate_nhpp.js --samples 10000 --lambda 5",
+    "test:integral": "node test/integrate_lambda.js",
+    "test:mmpp": "node test/analyze_mmpp.js",
+    "test:dirichlet": "node test/analyze_dirichlet.js",
+    "test:payload": "node test/measure_payload.js",
+    "test:repro": "node test/repro_hash.js --seed 42",
+    "test:all": "npm run test:nhpp && npm run test:integral && npm run test:mmpp && npm run test:dirichlet && npm run test:payload && npm run test:repro"
+  }
+}

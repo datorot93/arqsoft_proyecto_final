@@ -1,0 +1,36 @@
+# load/Dockerfile.k6 — k6 v0.53 con scripts del experimento embebidos.
+# Stack pinneado en versions.env y docs/experimento_asr.md §6.4.10.
+#
+# Decisión técnica documentada:
+#   El output `experimental-prometheus-rw` está INTEGRADO en k6 core a partir
+#   de v0.42 (Grafana lo movió de xk6 al binario oficial).  Por tanto NO
+#   necesitamos `xk6 build` — basta con FROM grafana/k6:0.53.0.
+#   (NB: Docker Hub usa el tag SIN prefijo `v`, distinto del git tag).
+#
+#   Si se necesitan extensiones adicionales (e.g. xk6-kafka, xk6-sql) se
+#   agrega un stage builder con `xk6 build`.  Para el experimento ASR-1/ASR-2
+#   las distribuciones estadísticas se implementan en JS (load/lib/sampler.js)
+#   sin dependencia externa.
+#
+# La imagen final corre como UID 12345 (estándar de k6 oficial); el manifest
+# K8s sobreescribe a runAsUser=65534 para alinear con el namespace baseline.
+
+FROM grafana/k6:0.53.0
+
+USER root
+RUN mkdir -p /load && chown -R 12345:0 /load
+
+# Copiamos los scripts JS bundleados (sin imports relativos -- generados por
+# scripts/bundle_k6.py).  Los CRDs K6 montan el script vía ConfigMap pero
+# este árbol queda como fallback / copia local para debugging.
+WORKDIR /load
+COPY load/dist/ /load/dist/
+COPY load/scenarios/ /load/scenarios/
+COPY load/lib/       /load/lib/
+COPY load/payloads/  /load/payloads/
+COPY load/runner/    /load/runner/
+
+USER 12345
+
+ENTRYPOINT ["k6"]
+CMD ["version"]

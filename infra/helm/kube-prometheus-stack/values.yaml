@@ -17,6 +17,11 @@ prometheus:
     retention: 7d
     retentionSize: "8GB"
 
+    # F5 — habilita el receiver `/api/v1/write` para que k6 envíe métricas
+    # vía `--out experimental-prometheus-rw`.  Sin esto Prometheus rechaza
+    # los pushes con HTTP 405.
+    enableRemoteWriteReceiver: true
+
     # Sin PV en kind — usar emptyDir para evitar PVCs que quedan Pending
     storageSpec: {}
 

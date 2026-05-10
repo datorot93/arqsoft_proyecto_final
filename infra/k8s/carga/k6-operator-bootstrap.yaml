@@ -1,0 +1,38 @@
+# k6-operator 0.0.16 — namespace y RBAC.
+# Patrón: instalación declarativa idempotente.  k6-operator se desplega en
+# el namespace `carga` (mismo namespace de los runs) para no proliferar
+# namespaces.  El operator gestiona los CRDs `K6` y `TestRun`.
+#
+# IMPORTANTE: el upstream del operator publica manifiestos completos en
+# https://github.com/grafana/k6-operator/releases/tag/v0.0.16 — nuestro
+# scripts/load_bootstrap.sh aplica esos manifiestos completos (RBAC, CRDs,
+# Deployment).  Este archivo declara solo los recursos pre-requisito que
+# el experimento necesita además: ServiceAccount con permiso para emitir
+# métricas a Prometheus y configmaps compartidos.
+
+---
+# ServiceAccount usado por los pods K6 ejecutados por el operator.
+# Hereda los permisos default + uno adicional para leer ConfigMaps del namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k6-runner
+  namespace: carga
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: load-runner
+
+---
+# ConfigMap con la URL de remote-write de Prometheus (consumido por los K6 CRs).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-prom-config
+  namespace: carga
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+data:
+  K6_PROMETHEUS_RW_SERVER_URL: "http://kube-prometheus-stack-prometheus.observabilidad.svc.cluster.local:9090/api/v1/write"
+  K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "false"
+  K6_PROMETHEUS_RW_PUSH_INTERVAL: "10s"
+  KONG_URL: "http://kong-kong-proxy.borde.svc.cluster.local"

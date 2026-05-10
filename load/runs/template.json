@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "linea-verde/load/run-manifest",
+  "description": "Manifest de una corrida de carga (warmup + baseline + peak). Reemplazar todos los `<...>` antes de archivar la corrida.",
+  "seed": "<int 64-bit, e.g. 42>",
+  "gitSha": "<output de `git rev-parse --short HEAD` al iniciar>",
+  "loadTreeSha": "<output de `git rev-parse --short HEAD:load`>",
+  "timestampUtc": "<ISO-8601, e.g. 2026-05-09T20:00:00Z>",
+  "k6": {
+    "version": "v0.53.0",
+    "image": "kind-registry:5000/linea-verde/k6-loader:latest",
+    "extensions": [
+      "xk6-output-prometheus-remote-write"
+    ]
+  },
+  "scenarios": {
+    "warmup": {
+      "executor": "ramping-arrival-rate",
+      "rate": 2,
+      "duration_s": 300,
+      "rationale": "Calentamiento — alinea JIT y connection pools del pool. NO autoritativo para SLA."
+    },
+    "baseline_asr1": {
+      "executor": "ramping-arrival-rate",
+      "rate": "0.2 r/s (1 req cada 5 s)",
+      "duration_s": 900,
+      "rationale": "ASR-1: P95 < 800 ms bajo carga nominal. Distribución uniforme país (no Dirichlet)."
+    },
+    "peak_asr2": {
+      "executor": "ramping-arrival-rate",
+      "stages": "30s buckets siguiendo λ(t) * mmpp_multiplier(t) — pre-generados deterministamente del seed",
+      "duration_s": 1200,
+      "rationale": "ASR-2: 6000 CDT en 20 min con NHPP+MMPP+Dirichlet. Escenario crítico."
+    }
+  },
+  "endpoint": "http://kong-kong-proxy.borde.svc.cluster.local:80/v1/cdt",
+  "headersInjected": {
+    "X-Pais": "<pe|mx|co — derivado del Dirichlet draw>",
+    "X-Stub-Latency-Profile": "pareto",
+    "X-Stub-Error-Rate": "0.005 (nominal) / 0.02 (en bursty si se eleva)",
+    "traceparent": "00-<traceId128>-<spanId64>-01 (W3C, derivado de seed+iter)"
+  },
+  "outputs": {
+    "prometheusRemoteWrite": "http://kube-prometheus-stack-prometheus.observabilidad.svc.cluster.local:9090/api/v1/write",
+    "summaryJson": "<ruta local del summary.json post-run>"
+  },
+  "validations": {
+    "preRun": [
+      "node test/validate_nhpp.js --samples 10000 --lambda 5",
+      "node test/integrate_lambda.js",
+      "node test/analyze_mmpp.js",
+      "node test/analyze_dirichlet.js",
+      "node test/measure_payload.js",
+      "node test/repro_hash.js --seed 42"
+    ]
+  }
+}

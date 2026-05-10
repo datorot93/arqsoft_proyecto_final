@@ -1,0 +1,45 @@
+{{/*
+cdt-pais-hpa.yaml — HPA por país (scale-up rápido, scale-down conservador).
+*/}}
+{{- if .Values.cdtPais.hpa.enabled }}
+{{- range .Values.paises }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cdt-pais-{{ . }}
+  namespace: {{ $.Values.namespaces.cdtPais }}
+  labels:
+    {{- include "lv-experiment.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: cdt-pais
+    app.kubernetes.io/instance: cdt-pais-{{ . }}
+    pais: {{ . }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cdt-pais-{{ . }}
+  minReplicas: {{ $.Values.cdtPais.hpa.minReplicas }}
+  maxReplicas: {{ $.Values.cdtPais.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $.Values.cdtPais.hpa.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 4
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+{{- end }}
+{{- end }}

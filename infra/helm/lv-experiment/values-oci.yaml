@@ -1,0 +1,59 @@
+# values-oci.yaml — Overrides para OKE (OCI).
+# Aplicar: helm install lv-experiment ./infra/helm/lv-experiment -f values-oci.yaml
+# REEMPLAZAR <region>, <tenancy-namespace> con valores reales antes de aplicar.
+
+image:
+  registry: "<region>.ocir.io"
+  organization: "<tenancy-namespace>/lv-experiment/linea-verde"
+  pullPolicy: Always
+
+# Secret de autenticación en OCIR — crear con:
+# kubectl create secret docker-registry ocir-secret \
+#   --docker-server=<region>.ocir.io \
+#   --docker-username=<tenancy-namespace>/oracleidentitycloudservice/<email> \
+#   --docker-password=<auth-token> \
+#   --namespace linea-verde
+imagePullSecrets:
+  - name: ocir-secret
+
+# OKE tiene más recursos — escalar según node pool E5.Flex 3-12 nodos
+cdtPais:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "768Mi"
+    limits:
+      cpu: "2000m"
+      memory: "2Gi"
+  hpa:
+    minReplicas: 3
+    maxReplicas: 30
+
+acl:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+outboxDispatcher:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "384Mi"
+    limits:
+      cpu: "600m"
+      memory: "768Mi"
+
+coreStub:
+  replicaCount: 2
+
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true

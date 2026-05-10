@@ -1,0 +1,54 @@
+---
+# validate-stack-versions.yaml
+# Verifica que versions.env sea consistente con la tabla §6.4.10 de docs/experimento_asr.md.
+# Disparado en push y PR. Duración: < 1 min.
+name: Validate Stack Versions
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate-versions:
+    name: versions.env vs §6.4.10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run check_versions.py
+        run: python3 scripts/check_versions.py docs/experimento_asr.md versions.env
+
+  lint-no-secrets:
+    name: No hard-coded OCI secrets in workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject echo $OCI_* patterns
+        run: |
+          if grep -rn 'echo \$OCI_' .github/workflows/ scripts/ Makefile 2>/dev/null; then
+            echo "ERROR: Se encontraron referencias a echo \$OCI_* — riesgo de fuga de secrets."
+            exit 1
+          fi
+          echo "OK: No se encontraron fugas de secrets OCI."
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install actionlint
+        run: |
+          ACTIONLINT_VER="1.7.3"
+          curl -sSL "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VER}/actionlint_${ACTIONLINT_VER}_linux_amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin actionlint
+          actionlint --version
+
+      - name: Lint workflows
+        run: actionlint .github/workflows/*.yaml

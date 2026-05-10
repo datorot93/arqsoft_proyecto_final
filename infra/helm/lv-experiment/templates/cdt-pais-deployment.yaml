@@ -1,0 +1,93 @@
+{{/*
+cdt-pais-deployment.yaml — Genera 1 Deployment por país en .Values.paises.
+Componente: CDTXPais (LineaVerde) — docs/experimento_asr.md §3.3
+*/}}
+{{- range .Values.paises }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cdt-pais-{{ . }}
+  namespace: {{ $.Values.namespaces.cdtPais }}
+  labels:
+    {{- include "lv-experiment.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: cdt-pais
+    app.kubernetes.io/instance: cdt-pais-{{ . }}
+    app.kubernetes.io/component: CDTXPais
+    pais: {{ . }}
+  annotations:
+    experimento.bancoz.com/doc: "docs/experimento_asr.md"
+spec:
+  replicas: {{ $.Values.cdtPais.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cdt-pais
+      app.kubernetes.io/instance: cdt-pais-{{ . }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cdt-pais
+        app.kubernetes.io/instance: cdt-pais-{{ . }}
+        app.kubernetes.io/component: CDTXPais
+        pais: {{ . }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "lv-experiment.podSecurityContext" $ | nindent 8 }}
+      containers:
+        - name: cdt-pais
+          image: {{ include "lv-experiment.image" (dict "service" "cdt-pais" "root" $) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LV_PAIS
+              value: {{ . | quote }}
+            {{- range $k, $v := $.Values.cdtPais.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-{{ . }}-app
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-{{ . }}-app
+                  key: password
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-{{ . }}-app
+                  key: uri
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          resources:
+            {{- toYaml $.Values.cdtPais.resources | nindent 12 }}
+{{- end }}

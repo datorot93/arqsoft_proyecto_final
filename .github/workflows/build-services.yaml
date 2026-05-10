@@ -1,0 +1,93 @@
+---
+# build-services.yaml
+# Build reproducible con Gradle + Jib. Push a OCIR (prod) en push a main y tags.
+# Duración: ~ 8 min.
+name: Build Services
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+env:
+  REGISTRY_HOST: ${{ secrets.OCIR_REGION }}.ocir.io/${{ secrets.OCIR_TENANCY_NAMESPACE }}/lv-experiment
+
+jobs:
+  read-versions:
+    name: Read versions.env
+    runs-on: ubuntu-latest
+    outputs:
+      java_version: ${{ steps.vers.outputs.java_version }}
+      gradle_version: ${{ steps.vers.outputs.gradle_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse versions.env
+        id: vers
+        run: |
+          source versions.env
+          echo "java_version=${JAVA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "gradle_version=${GRADLE_VERSION}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: read-versions
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [cdt-pais, acl, outbox-dispatcher, core-stub]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ needs.read-versions.outputs.java_version }}
+          distribution: temurin
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Mask OCI credentials
+        run: |
+          echo "::add-mask::${{ secrets.OCIR_PASSWORD }}"
+          echo "::add-mask::${{ secrets.OCI_TENANCY_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_USER_OCID }}"
+
+      - name: Login to OCIR
+        run: |
+          echo "${{ secrets.OCIR_PASSWORD }}" | docker login \
+            "${{ secrets.OCIR_REGION }}.ocir.io" \
+            -u "${{ secrets.OCIR_TENANCY_NAMESPACE }}/oracleidentitycloudservice/${{ secrets.OCIR_USER_EMAIL }}" \
+            --password-stdin
+
+      - name: Build and push with Jib
+        working-directory: services
+        env:
+          REGISTRY: ${{ env.REGISTRY_HOST }}
+        run: |
+          ./gradlew :${{ matrix.service }}:jib \
+            -PregistryHost="${REGISTRY}" \
+            --console=plain
+
+      - name: Record image digest
+        id: digest
+        run: |
+          IMAGE="${{ env.REGISTRY_HOST }}/linea-verde/${{ matrix.service }}"
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:latest" --format '{{.Manifest.Digest}}' 2>/dev/null || echo "N/A")
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Image: ${IMAGE} digest: ${DIGEST}"
+
+  summary:
+    name: Build summary
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    steps:
+      - name: Report
+        run: |
+          echo "Build completed. Services: cdt-pais, acl, outbox-dispatcher, core-stub"
+          echo "Registry: ${{ env.REGISTRY_HOST }}"
+          echo "Commit SHA: ${{ github.sha }}"

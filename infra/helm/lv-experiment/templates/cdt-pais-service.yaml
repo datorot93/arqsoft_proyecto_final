@@ -1,0 +1,26 @@
+{{/*
+cdt-pais-service.yaml — 1 Service por país.
+*/}}
+{{- range .Values.paises }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cdt-pais-{{ . }}
+  namespace: {{ $.Values.namespaces.cdtPais }}
+  labels:
+    {{- include "lv-experiment.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: cdt-pais
+    app.kubernetes.io/instance: cdt-pais-{{ . }}
+    pais: {{ . }}
+spec:
+  type: {{ $.Values.cdtPais.service.type }}
+  ports:
+    - port: {{ $.Values.cdtPais.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: cdt-pais
+    app.kubernetes.io/instance: cdt-pais-{{ . }}
+{{- end }}

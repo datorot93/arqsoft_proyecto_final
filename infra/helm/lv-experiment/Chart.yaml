@@ -1,0 +1,17 @@
+apiVersion: v2
+name: lv-experiment
+description: "Chart unificado del experimento Línea Verde (ASR-1/ASR-2). Cubre los servicios Spring Boot del proyecto: cdt-pais, acl, outbox-dispatcher, core-stub. Compatible con kind (local) y OKE (OCI) — solo cambian los values overlay."
+type: application
+version: 0.1.0
+appVersion: "0.1.0-SNAPSHOT"
+keywords:
+  - linea-verde
+  - banco-z
+  - experimento-asr
+maintainers:
+  - name: devops-ci-engineer
+    email: devops@bancoz.com
+home: https://github.com/datorot93/arqsoft_proyecto_final
+annotations:
+  experimento.bancoz.com/doc: "docs/experimento_asr.md"
+  experimento.bancoz.com/spec: ".claude/specs/fase7_reproducibilidad_ci.md"

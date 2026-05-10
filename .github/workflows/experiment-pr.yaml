@@ -1,0 +1,162 @@
+---
+# experiment-pr.yaml
+# Corre 1 ronda smoke del experimento en un PR con label `run-experiment`.
+# Levanta kind inline, aplica F1-F4, ejecuta warmup+baseline corto, publica reporte.
+# Duración: ~ 60 min.
+name: Experiment PR
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  check-label:
+    name: Check run-experiment label
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'run-experiment'
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - id: check
+        run: echo "should_run=true" >> "$GITHUB_OUTPUT"
+
+  experiment-smoke:
+    name: Smoke experiment (1 round)
+    runs-on: ubuntu-latest
+    needs: check-label
+    if: needs.check-label.outputs.should_run == 'true'
+    timeout-minutes: 90
+    env:
+      KIND_CLUSTER_NAME: linea-verde-ci
+      SEED: "42"
+      MODE: smoke
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read versions.env
+        id: vers
+        run: |
+          source versions.env
+          echo "kind_version=${KIND_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "java_version=${JAVA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "kind_image=${KIND_NODE_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "helm_version=${HELM_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ steps.vers.outputs.java_version }}
+          distribution: temurin
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install kind
+        run: |
+          KIND_VERSION="${{ steps.vers.outputs.kind_version }}"
+          curl -sSLo /usr/local/bin/kind \
+            "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x /usr/local/bin/kind
+          kind version
+
+      - name: Install helm
+        run: |
+          HELM_VERSION="${{ steps.vers.outputs.helm_version }}"
+          curl -sSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin --strip-components=1 linux-amd64/helm
+          helm version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --quiet -r runs/requirements.txt 2>/dev/null || true
+          pip install --quiet requests pyyaml jinja2 scipy numpy 2>/dev/null || true
+
+      - name: Record experiment_spec_sha
+        id: spec_sha
+        run: |
+          SHA=$(git hash-object docs/experimento_asr.md)
+          echo "spec_sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Experiment spec SHA: ${SHA}"
+
+      - name: Create kind cluster
+        run: |
+          kind create cluster \
+            --name "$KIND_CLUSTER_NAME" \
+            --image "${{ steps.vers.outputs.kind_image }}" \
+            --config infra/kind/kind-config.yaml \
+            --wait 5m
+
+      - name: Bootstrap cluster (F1)
+        run: |
+          export KIND_CLUSTER_NAME
+          bash scripts/bootstrap_cluster.sh
+
+      - name: Bootstrap platform (F2)
+        run: bash scripts/platform_bootstrap.sh
+
+      - name: Bootstrap observability (F3)
+        run: bash scripts/observability_bootstrap.sh
+
+      - name: Build services (Jib to kind registry)
+        working-directory: services
+        env:
+          REGISTRY: kind-registry:5000
+        run: ./gradlew jib --console=plain
+
+      - name: Deploy services (F4)
+        run: bash scripts/services_deploy.sh
+
+      - name: Build and deploy load (F5)
+        run: |
+          make load-build
+          bash scripts/load_bootstrap.sh
+
+      - name: Run smoke round
+        env:
+          EXPERIMENT_SPEC_SHA: ${{ steps.spec_sha.outputs.spec_sha }}
+        run: python3 runs/run_round.py --seed "$SEED" --smoke
+
+      - name: Aggregate report
+        run: python3 runs/aggregate_results.py runs/results/r*
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: experiment-report-pr-${{ github.event.pull_request.number }}
+          path: |
+            runs/results/
+            report/
+          retention-days: 90
+
+      - name: Check verdicts
+        run: |
+          LATEST=$(ls -dt runs/results/r*-s*-* 2>/dev/null | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "ERROR: No round results found."
+            exit 1
+          fi
+          python3 - <<'EOF'
+          import json, sys, pathlib, glob
+          results = sorted(pathlib.Path("runs/results").glob("r*-s*-*/verdicts.json"))
+          if not results:
+              print("ERROR: no verdicts.json found")
+              sys.exit(1)
+          with open(results[-1]) as f:
+              v = json.load(f)
+          passed = all(v.get(k, {}).get("passed", False) for k in v)
+          if not passed:
+              failed = [k for k in v if not v[k].get("passed", False)]
+              print(f"EXPERIMENT FAILED: {failed}")
+              sys.exit(1)
+          print("EXPERIMENT PASSED: all AC-* criteria met")
+          EOF
+
+      - name: Teardown kind cluster
+        if: always()
+        run: kind delete cluster --name "$KIND_CLUSTER_NAME" || true

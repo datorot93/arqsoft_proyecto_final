@@ -1,0 +1,230 @@
+---
+# experiment-nightly.yaml
+# Ejecuta N=5 rondas completas del experimento cada noche.
+# Seeds deterministas derivados de la fecha (YYYYMMDD + offset 0-4).
+# Si AC-* falla, reintenta 1 vez. Si falla 2 veces consecutivas, abre issue.
+# Duración: ~ 4 h.
+name: Experiment Nightly
+
+on:
+  schedule:
+    # 02:00 UTC diariamente
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      n_rounds:
+        description: "Número de rondas (default 5)"
+        default: "5"
+        required: false
+      mode:
+        description: "Modo: smoke | scaled | full"
+        default: "full"
+        required: false
+
+concurrency:
+  group: experiment-nightly
+  cancel-in-progress: false
+
+jobs:
+  run-experiment:
+    name: Nightly experiment (N=5 rounds)
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    # Reintentos: hasta 2 intentos (1 retry automático)
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+    env:
+      KIND_CLUSTER_NAME: linea-verde-nightly
+      N_ROUNDS: ${{ github.event.inputs.n_rounds || '5' }}
+      MODE: ${{ github.event.inputs.mode || 'full' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read versions.env
+        id: vers
+        run: |
+          source versions.env
+          echo "kind_version=${KIND_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "java_version=${JAVA_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "kind_image=${KIND_NODE_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "helm_version=${HELM_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ steps.vers.outputs.java_version }}
+          distribution: temurin
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install kind
+        run: |
+          KIND_VERSION="${{ steps.vers.outputs.kind_version }}"
+          curl -sSLo /usr/local/bin/kind \
+            "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x /usr/local/bin/kind
+
+      - name: Install helm
+        run: |
+          HELM_VERSION="${{ steps.vers.outputs.helm_version }}"
+          curl -sSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin --strip-components=1 linux-amd64/helm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --quiet requests pyyaml jinja2 scipy numpy 2>/dev/null || true
+
+      - name: Record experiment_spec_sha
+        id: spec_sha
+        run: |
+          SHA=$(git hash-object docs/experimento_asr.md)
+          echo "spec_sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Experiment spec SHA: ${SHA}"
+
+      - name: Compute seeds from date
+        id: seeds
+        run: |
+          # Seeds deterministas: YYYYMMDD + offset 0..(N-1)
+          BASE_SEED=$(date +%Y%m%d)
+          SEEDS=""
+          for i in $(seq 0 $((N_ROUNDS - 1))); do
+            SEEDS="${SEEDS} $((BASE_SEED + i))"
+          done
+          echo "seeds=${SEEDS# }" >> "$GITHUB_OUTPUT"
+          echo "Computed seeds: ${SEEDS# }"
+
+      - name: Create kind cluster
+        run: |
+          kind create cluster \
+            --name "$KIND_CLUSTER_NAME" \
+            --image "${{ steps.vers.outputs.kind_image }}" \
+            --config infra/kind/kind-config.yaml \
+            --wait 5m
+
+      - name: Bootstrap full stack (F1-F5)
+        run: |
+          export KIND_CLUSTER_NAME
+          bash scripts/bootstrap_cluster.sh
+          bash scripts/platform_bootstrap.sh
+          bash scripts/observability_bootstrap.sh
+          cd services && REGISTRY=kind-registry:5000 ./gradlew jib --console=plain && cd ..
+          bash scripts/services_deploy.sh
+          make load-build
+          bash scripts/load_bootstrap.sh
+
+      - name: Run N rounds
+        env:
+          EXPERIMENT_SPEC_SHA: ${{ steps.spec_sha.outputs.spec_sha }}
+        run: |
+          SEEDS="${{ steps.seeds.outputs.seeds }}"
+          ROUND_NUM=0
+          for SEED in $SEEDS; do
+            ROUND_NUM=$((ROUND_NUM + 1))
+            echo "=== Ronda ${ROUND_NUM}/${N_ROUNDS} — seed=${SEED} mode=${MODE} ==="
+            python3 runs/run_round.py --seed "$SEED" "--${MODE}"
+          done
+          python3 runs/aggregate_results.py runs/results/r*
+
+      - name: Verify AC-* criteria
+        id: verify
+        run: |
+          python3 - <<'EOF'
+          import json, sys, pathlib
+          results = sorted(pathlib.Path("runs/results").glob("r*-s*-*/verdicts.json"))
+          if not results:
+              print("ERROR: no verdicts.json found")
+              sys.exit(1)
+          all_passed = True
+          for r in results:
+              with open(r) as f:
+                  v = json.load(f)
+              passed = all(v.get(k, {}).get("passed", False) for k in v)
+              if not passed:
+                  all_passed = False
+                  failed = [k for k in v if not v[k].get("passed", False)]
+                  print(f"FAILED in {r.parent.name}: {failed}")
+          if not all_passed:
+              sys.exit(1)
+          print(f"EXPERIMENT PASSED: all {len(results)} rounds met AC-* criteria")
+          EOF
+
+      - name: Upload nightly report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-report-${{ github.run_id }}
+          path: |
+            runs/results/
+            report/
+          retention-days: 90
+
+      - name: Teardown kind cluster
+        if: always()
+        run: kind delete cluster --name "$KIND_CLUSTER_NAME" || true
+
+  open-issue-on-failure:
+    name: Open issue if nightly failed 2x
+    runs-on: ubuntu-latest
+    needs: run-experiment
+    if: failure()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check recent nightly failures
+        id: check_failures
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Contar failures recientes del workflow nightly (últimas 48h)
+          RECENT_FAILURES=$(gh run list \
+            --workflow experiment-nightly.yaml \
+            --status failure \
+            --limit 5 \
+            --json createdAt,conclusion \
+            | python3 -c "
+          import json, sys, datetime
+          runs = json.load(sys.stdin)
+          now = datetime.datetime.utcnow()
+          cutoff = now - datetime.timedelta(hours=48)
+          recent = [r for r in runs if r.get('conclusion') == 'failure']
+          print(len(recent))
+          ")
+          echo "recent_failures=${RECENT_FAILURES}" >> "$GITHUB_OUTPUT"
+          echo "Recent failures in last 48h: ${RECENT_FAILURES}"
+
+      - name: Open issue if >= 2 consecutive failures
+        if: steps.check_failures.outputs.recent_failures >= '2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Verificar que no haya un issue abierto ya con esta etiqueta
+          OPEN=$(gh issue list \
+            --label experiment-broken \
+            --state open \
+            --json number \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d))")
+          if [ "$OPEN" -gt 0 ]; then
+            echo "Ya existe un issue abierto con label experiment-broken. No se crea duplicado."
+            exit 0
+          fi
+          gh issue create \
+            --title "Experimento nightly roto (2+ fallos consecutivos)" \
+            --body "## Alerta: Experimento nightly fallando
+
+          El workflow \`experiment-nightly.yaml\` ha fallado **2 o más veces consecutivas** en las últimas 48 horas.
+
+          **Acción requerida:** Investigar el log del último run y corregir antes de que el experimento sea inválido.
+
+          **Run fallido:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          **Fecha:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          cc @${{ github.actor }}" \
+            --label experiment-broken

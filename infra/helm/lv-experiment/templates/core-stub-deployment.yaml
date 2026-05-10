@@ -1,0 +1,60 @@
+---
+# core-stub-deployment.yaml — CoreBancoZ stub (simulador con latencia + error rate).
+# NO es parte de Línea Verde — es un simulador del sistema externo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-stub
+  namespace: {{ .Values.namespaces.coreStub }}
+  labels:
+    {{- include "lv-experiment.labels" . | nindent 4 }}
+    app.kubernetes.io/name: core-stub
+    app.kubernetes.io/component: CoreBancoZStub
+spec:
+  replicas: {{ .Values.coreStub.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core-stub
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core-stub
+        app.kubernetes.io/component: CoreBancoZStub
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- include "lv-experiment.podSecurityContext" . | nindent 8 }}
+      containers:
+        - name: core-stub
+          image: {{ include "lv-experiment.image" (dict "service" "core-stub" "root" .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            {{- range $k, $v := .Values.coreStub.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.coreStub.resources | nindent 12 }}

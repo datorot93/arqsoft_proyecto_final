@@ -27,3 +27,7 @@ runs/results/
 
 # Lock interno de scheduled_tasks (no versionado)
 .claude/scheduled_tasks.lock
+
+# Terraform (F7) — providers descargados y locks locales
+infra/terraform/**/.terraform/
+infra/terraform/**/.terraform.lock.hcl

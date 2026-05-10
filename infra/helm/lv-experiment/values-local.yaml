@@ -1,0 +1,22 @@
+# values-local.yaml — Overrides para kind (local).
+# Aplicar: helm install lv-experiment ./infra/helm/lv-experiment -f values-local.yaml
+
+image:
+  registry: "kind-registry:5000"
+  pullPolicy: IfNotPresent
+
+# En kind, el node local registry no requiere pull secrets
+imagePullSecrets: []
+
+# Replicas reducidas para entorno con recursos limitados (1 nodo)
+cdtPais:
+  replicaCount: 2
+
+acl:
+  replicaCount: 1
+
+outboxDispatcher:
+  replicaCount: 1
+
+coreStub:
+  replicaCount: 1

@@ -125,6 +125,74 @@ f6-report: ## Abre el último report.html en navegador (xdg-open / wsl-open)
 test-f6: ## Ejecuta los 10 tests del gate F6 (inspección de la última ronda)
 	@bash tests/f6/run-gates.sh
 
+##@ F7 — Reproducibilidad (CI/CD + IaC OCI)
+
+experiment: ## Levanta stack completo y corre 1 ronda smoke (idempotente si cluster ya existe)
+	@kind get clusters 2>/dev/null | grep -q "$${KIND_CLUSTER_NAME:-linea-verde}" || make up
+	@bash -c 'kind get clusters 2>/dev/null | grep -q "$${KIND_CLUSTER_NAME:-linea-verde}" && echo "cluster ya existe, skipping platform-up..." || make platform-up' || make platform-up
+	@make observability-up || true
+	@make services-build
+	@make services-deploy
+	@make load-build
+	@make load-deploy
+	@python3 runs/run_round.py --seed $${SEED:-42} --$${MODE:-smoke}
+	@echo "Ronda completada. Ver reporte: make report"
+
+report: ## Genera reporte agregado y lo abre (requiere rondas previas en runs/results/)
+	@python3 runs/aggregate_results.py runs/results/r* 2>/dev/null || echo "Sin rondas para agregar"
+	@latest=$$(ls -dt runs/results/r*-s*-* 2>/dev/null | head -1); \
+	if [ -z "$$latest" ]; then echo "Sin rondas disponibles"; exit 1; fi; \
+	report="$$latest/report.html"; \
+	echo "→ $$report"; \
+	if command -v wslview >/dev/null; then wslview "$$report"; \
+	elif command -v xdg-open >/dev/null; then xdg-open "$$report"; \
+	else echo "Abrir manualmente: $$report"; fi
+
+tf-validate: ## terraform validate + tflint en todos los módulos infra/terraform/
+	@echo "=== terraform validate ==="
+	@for d in infra/terraform/networking infra/terraform/iam infra/terraform/oke \
+	           infra/terraform/db infra/terraform/streaming infra/terraform/registry \
+	           infra/terraform/examples; do \
+		echo "→ $$d"; \
+		terraform -chdir="$$d" init -backend=false -no-color >/dev/null 2>&1 && \
+		terraform -chdir="$$d" validate -no-color && echo "  ✓ válido" || echo "  ✗ FALLO"; \
+	done
+	@echo ""
+	@echo "=== tflint ==="
+	@if command -v tflint >/dev/null 2>&1; then \
+		tflint --recursive --config infra/terraform/.tflint.hcl; \
+	else \
+		echo "tflint no instalado — instalar: https://github.com/terraform-linters/tflint"; \
+	fi
+
+tf-plan: ## Lanza terraform plan vía GitHub Actions (requiere credenciales OCI en secrets)
+	@echo "Para lanzar el plan en CI: gh workflow run terraform-plan.yaml"
+	@echo "Para validar localmente sin credenciales: make tf-validate"
+	@if command -v gh >/dev/null 2>&1; then \
+		echo "Disponible: gh workflow run terraform-plan.yaml"; \
+	fi
+
+tf-apply: ## Lanza terraform apply vía workflow_dispatch en GitHub Actions
+	@if command -v gh >/dev/null 2>&1; then \
+		gh workflow run terraform-apply.yaml \
+			-f action=apply \
+			-f db_engine=$${DB_ENGINE:-postgres} \
+			-f ttl_hours=$${TTL_HOURS:-24} \
+			-f skip_destroy=$${SKIP_DESTROY:-false}; \
+	else \
+		echo "ERROR: gh CLI no instalado. Instalar: https://cli.github.com/"; \
+		exit 1; \
+	fi
+
+helm-lint: ## helm lint del chart lv-experiment
+	@helm lint infra/helm/lv-experiment
+
+check-versions: ## Verifica que versions.env coincida con docs/experimento_asr.md §6.4.10
+	@python3 scripts/check_versions.py docs/experimento_asr.md versions.env
+
+test-f7: ## Ejecuta los 12 tests del gate F7 (CI/CD + IaC + Helm)
+	@bash tests/f7/run-gates.sh
+
 ##@ Validación estática
 
 validate-manifests: ## Valida los manifiestos K8s con --dry-run=client (no requiere cluster)
@@ -135,7 +203,7 @@ validate-manifests: ## Valida los manifiestos K8s con --dry-run=client (no requi
 	@echo "✓ Todos los manifiestos validados"
 
 validate-versions: ## Verifica que versions.env coincida con docs/experimento_asr.md §6.4.10
-	@echo "TODO en F7: scripts/check_versions.py"
+	@python3 scripts/check_versions.py docs/experimento_asr.md versions.env
 
 ##@ Utilidades
 
@@ -148,5 +216,6 @@ help: ## Muestra esta ayuda
 .PHONY: up down nuke platform-up platform-down observability-up observability-down \
         services-build services-deploy services-down \
         load-build load-deploy load-warmup load-baseline load-peak load-down validate-load-model \
-        test-f1 test-f2 test-f3 test-f4 test-f5 \
+        test-f1 test-f2 test-f3 test-f4 test-f5 test-f6 \
+        experiment report tf-validate tf-plan tf-apply helm-lint check-versions test-f7 \
         validate-manifests validate-versions clean help

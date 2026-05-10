@@ -1,0 +1,196 @@
+---
+# terraform-apply.yaml
+# Aprovisiona infraestructura OCI (OKE, DB, Streaming, OCIR, VCN, IAM).
+# SOLO manual (workflow_dispatch). TTL default 24h, luego terraform destroy.
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Acción: apply | destroy"
+        required: true
+        default: apply
+        type: choice
+        options:
+          - apply
+          - destroy
+      db_engine:
+        description: "Motor de BD: postgres | atp"
+        required: false
+        default: postgres
+        type: choice
+        options:
+          - postgres
+          - atp
+      ttl_hours:
+        description: "TTL en horas antes del destroy automático (default 24)"
+        required: false
+        default: "24"
+      skip_destroy:
+        description: "Omitir el destroy automático por TTL (true/false)"
+        required: false
+        default: "false"
+        type: boolean
+
+concurrency:
+  group: terraform-apply
+  cancel-in-progress: false
+
+jobs:
+  read-versions:
+    name: Read Terraform version
+    runs-on: ubuntu-latest
+    outputs:
+      terraform_version: ${{ steps.vers.outputs.terraform_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: vers
+        run: |
+          source versions.env
+          echo "terraform_version=${TERRAFORM_VERSION}" >> "$GITHUB_OUTPUT"
+
+  terraform-apply:
+    name: terraform ${{ github.event.inputs.action }}
+    runs-on: ubuntu-latest
+    needs: read-versions
+    if: github.event.inputs.action == 'apply'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ needs.read-versions.outputs.terraform_version }}
+
+      - name: Mask OCI credentials
+        run: |
+          echo "::add-mask::${{ secrets.OCI_TENANCY_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_USER_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_FINGERPRINT }}"
+          echo "::add-mask::${{ secrets.OCI_PRIVATE_KEY }}"
+          echo "::add-mask::${{ secrets.OCI_REGION }}"
+
+      - name: Write OCI private key
+        run: |
+          mkdir -p ~/.oci
+          printf '%s' "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+      - name: terraform init
+        working-directory: infra/terraform/examples
+        run: terraform init
+
+      - name: terraform apply
+        working-directory: infra/terraform/examples
+        env:
+          TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+          TF_VAR_private_key_path: ~/.oci/oci_api_key.pem
+          TF_VAR_region: ${{ secrets.OCI_REGION }}
+          TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
+          TF_VAR_db_engine: ${{ github.event.inputs.db_engine }}
+        run: |
+          terraform apply -auto-approve
+          terraform output -json > /tmp/tf-outputs.json
+          echo "=== Outputs ==="
+          terraform output
+
+      - name: Upload state outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-${{ github.run_id }}
+          path: /tmp/tf-outputs.json
+          retention-days: 90
+
+  terraform-destroy-manual:
+    name: terraform destroy (manual)
+    runs-on: ubuntu-latest
+    needs: read-versions
+    if: github.event.inputs.action == 'destroy'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ needs.read-versions.outputs.terraform_version }}
+
+      - name: Mask OCI credentials
+        run: |
+          echo "::add-mask::${{ secrets.OCI_TENANCY_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_USER_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_FINGERPRINT }}"
+          echo "::add-mask::${{ secrets.OCI_PRIVATE_KEY }}"
+
+      - name: Write OCI private key
+        run: |
+          mkdir -p ~/.oci
+          printf '%s' "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+      - name: terraform destroy
+        working-directory: infra/terraform/examples
+        env:
+          TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+          TF_VAR_private_key_path: ~/.oci/oci_api_key.pem
+          TF_VAR_region: ${{ secrets.OCI_REGION }}
+          TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
+        run: |
+          terraform init
+          terraform destroy -auto-approve
+
+  terraform-destroy-ttl:
+    name: terraform destroy (TTL ${{ github.event.inputs.ttl_hours }}h)
+    runs-on: ubuntu-latest
+    needs: [read-versions, terraform-apply]
+    if: >
+      github.event.inputs.action == 'apply' &&
+      github.event.inputs.skip_destroy != 'true'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ needs.read-versions.outputs.terraform_version }}
+
+      - name: Wait for TTL
+        run: |
+          TTL_HOURS="${{ github.event.inputs.ttl_hours }}"
+          TTL_SECS=$((TTL_HOURS * 3600))
+          echo "Esperando ${TTL_HOURS}h = ${TTL_SECS}s antes del destroy automático..."
+          sleep "$TTL_SECS"
+
+      - name: Mask OCI credentials
+        run: |
+          echo "::add-mask::${{ secrets.OCI_TENANCY_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_USER_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_FINGERPRINT }}"
+          echo "::add-mask::${{ secrets.OCI_PRIVATE_KEY }}"
+
+      - name: Write OCI private key
+        run: |
+          mkdir -p ~/.oci
+          printf '%s' "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+      - name: terraform destroy (auto TTL)
+        working-directory: infra/terraform/examples
+        env:
+          TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+          TF_VAR_private_key_path: ~/.oci/oci_api_key.pem
+          TF_VAR_region: ${{ secrets.OCI_REGION }}
+          TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
+        run: |
+          terraform init
+          terraform destroy -auto-approve
+          echo "DESTROYED: recursos OCI eliminados tras TTL de ${{ github.event.inputs.ttl_hours }}h"

@@ -1,0 +1,29 @@
+{
+  "action": "labeled",
+  "label": {
+    "name": "run-experiment"
+  },
+  "pull_request": {
+    "number": 1,
+    "title": "Test PR for experiment smoke run",
+    "head": {
+      "sha": "abc123",
+      "ref": "feature/test-experiment"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "labels": [
+      {
+        "name": "run-experiment"
+      }
+    ]
+  },
+  "repository": {
+    "full_name": "datorot93/arqsoft_proyecto_final",
+    "name": "arqsoft_proyecto_final"
+  },
+  "sender": {
+    "login": "datorot93"
+  }
+}

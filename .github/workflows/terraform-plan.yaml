@@ -1,0 +1,109 @@
+---
+# terraform-plan.yaml
+# Corre terraform plan en PRs con cambios en infra/terraform/.
+# Duración: ~ 3 min. No requiere credenciales reales para validate; plan sí.
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+
+jobs:
+  read-versions:
+    name: Read Terraform version
+    runs-on: ubuntu-latest
+    outputs:
+      terraform_version: ${{ steps.vers.outputs.terraform_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: vers
+        name: Parse versions.env
+        run: |
+          source versions.env
+          echo "terraform_version=${TERRAFORM_VERSION}" >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: terraform validate (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    needs: read-versions
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [networking, iam, oke, db, streaming, registry]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ needs.read-versions.outputs.terraform_version }}
+
+      - name: terraform init (backend-off)
+        run: terraform -chdir="infra/terraform/${{ matrix.module }}" init -backend=false
+
+      - name: terraform validate
+        run: terraform -chdir="infra/terraform/${{ matrix.module }}" validate
+
+  tflint:
+    name: tflint recursive
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tflint
+        run: |
+          curl -sSL https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          tflint --version
+
+      - name: Run tflint
+        run: tflint --recursive --config infra/terraform/.tflint.hcl
+
+  plan:
+    name: terraform plan (requires OCI credentials)
+    runs-on: ubuntu-latest
+    needs: [validate, read-versions]
+    # El plan contra OCI real solo corre en repositorios con secrets configurados.
+    # Para forzar skip sin credenciales: agregar variable SKIP_TF_PLAN=true en el repo.
+    if: vars.SKIP_TF_PLAN != 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ needs.read-versions.outputs.terraform_version }}
+
+      - name: Mask OCI credentials
+        run: |
+          echo "::add-mask::${{ secrets.OCI_TENANCY_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_USER_OCID }}"
+          echo "::add-mask::${{ secrets.OCI_FINGERPRINT }}"
+          echo "::add-mask::${{ secrets.OCI_PRIVATE_KEY }}"
+
+      - name: Write OCI private key
+        run: |
+          mkdir -p ~/.oci
+          printf '%s' "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+      - name: terraform plan (examples/full)
+        working-directory: infra/terraform/examples
+        env:
+          TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+          TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+          TF_VAR_private_key_path: ~/.oci/oci_api_key.pem
+          TF_VAR_region: ${{ secrets.OCI_REGION }}
+          TF_VAR_compartment_ocid: ${{ secrets.OCI_COMPARTMENT_OCID }}
+        run: |
+          terraform init
+          terraform plan -out=tfplan
+          terraform show -no-color tfplan
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ github.event.pull_request.number }}
+          path: infra/terraform/examples/tfplan
+          retention-days: 7

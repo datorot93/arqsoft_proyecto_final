@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "lv-experiment chart values",
+  "description": "Schema de validación para los values del chart lv-experiment. Banco Z – Línea Verde.",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "object",
+      "description": "Configuración de imágenes de contenedor.",
+      "properties": {
+        "registry": {
+          "type": "string",
+          "description": "Registry de imágenes (ej: kind-registry:5000 o <region>.ocir.io).",
+          "minLength": 1
+        },
+        "organization": {
+          "type": "string",
+          "description": "Organización/namespace dentro del registry.",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "description": "Tag de imagen (ej: latest, 0.1.0-SNAPSHOT, git SHA).",
+          "minLength": 1
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"],
+          "description": "Política de pull de imágenes."
+        }
+      },
+      "required": ["registry", "tag"]
+    },
+    "paises": {
+      "type": "array",
+      "description": "Lista de países para los que se generan instancias de cdt-pais y outbox-dispatcher.",
+      "items": {
+        "type": "string",
+        "enum": ["pe", "mx", "co"]
+      },
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "cdtPais": {
+      "type": "object",
+      "description": "Configuración del servicio CDTXPais.",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Número de réplicas base (HPA puede escalar más)."
+        },
+        "resources": {
+          "$ref": "#/$defs/resourceRequirements"
+        },
+        "hpa": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "minReplicas": {"type": "integer", "minimum": 1},
+            "maxReplicas": {"type": "integer", "minimum": 1},
+            "targetCPUUtilizationPercentage": {"type": "integer", "minimum": 1, "maximum": 100}
+          }
+        },
+        "service": {
+          "$ref": "#/$defs/serviceSpec"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      },
+      "required": ["replicaCount"]
+    },
+    "acl": {
+      "type": "object",
+      "description": "Configuración del servicio ACL (AdaptadorCore + CircuitBreaker).",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/resourceRequirements"
+        },
+        "service": {
+          "$ref": "#/$defs/serviceSpec"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      },
+      "required": ["replicaCount"]
+    },
+    "outboxDispatcher": {
+      "type": "object",
+      "description": "Configuración del outbox-dispatcher.",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/resourceRequirements"
+        }
+      },
+      "required": ["replicaCount"]
+    },
+    "coreStub": {
+      "type": "object",
+      "description": "Configuración del core-stub (CoreBancoZ simulado).",
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/resourceRequirements"
+        },
+        "service": {
+          "$ref": "#/$defs/serviceSpec"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      },
+      "required": ["replicaCount"]
+    },
+    "namespaces": {
+      "type": "object",
+      "description": "Namespaces Kubernetes donde se despliega cada componente.",
+      "properties": {
+        "cdtPais": {"type": "string"},
+        "acl": {"type": "string"},
+        "outboxDispatcher": {"type": "string"},
+        "coreStub": {"type": "string"}
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "serviceMonitor": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "interval": {"type": "string"},
+            "path": {"type": "string"}
+          }
+        }
+      }
+    },
+    "podSecurityContext": {
+      "type": "object",
+      "properties": {
+        "runAsNonRoot": {"type": "boolean"},
+        "runAsUser": {"type": "integer", "minimum": 1},
+        "runAsGroup": {"type": "integer", "minimum": 1},
+        "fsGroup": {"type": "integer", "minimum": 1}
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"}
+        },
+        "required": ["name"]
+      }
+    }
+  },
+  "required": ["image", "paises", "cdtPais", "acl", "outboxDispatcher", "coreStub"],
+  "$defs": {
+    "resourceRequirements": {
+      "type": "object",
+      "description": "Requests y limits de CPU y memoria.",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "properties": {
+            "cpu": {"type": "string"},
+            "memory": {"type": "string"}
+          }
+        },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "cpu": {"type": "string"},
+            "memory": {"type": "string"}
+          }
+        }
+      }
+    },
+    "serviceSpec": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    }
+  }
+}

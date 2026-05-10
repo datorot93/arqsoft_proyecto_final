@@ -78,6 +78,18 @@ DURATIONS = {
         # 6000 * (120/1200) = 600
         "peak_volume_threshold": 600,
     },
+    # F8 — smoke E2E corto: warmup 2 min + baseline 3 min + peak 5 min.
+    # Volumen objetivo: ~1500 CDT en 5 min (4× la tasa media del peak completo).
+    # NOTA: No es el veredicto autoritativo — ese requiere mode=full con N=5.
+    "e2e-short": {
+        "warmup": 120,
+        "baseline": 180,
+        "peak": 300,
+        "warmup_rate": 2,
+        "baseline_target_rps": 0.2,
+        # umbral proporcional 6000 * (300 / 1200) = 1500
+        "peak_volume_threshold": 1500,
+    },
 }
 
 
@@ -587,6 +599,8 @@ def main() -> int:
     g.add_argument("--full", action="store_const", dest="mode", const="full")
     g.add_argument("--scaled", action="store_const", dest="mode", const="scaled")
     g.add_argument("--smoke", action="store_const", dest="mode", const="smoke")
+    g.add_argument("--e2e-short", action="store_const", dest="mode", const="e2e-short",
+                   help="F8 smoke corto: warmup=120s baseline=180s peak=300s threshold=1500")
     p.add_argument("--out", default=str(ROOT / "runs" / "results"))
     p.add_argument("--skip-warmup", action="store_true")
     args = p.parse_args()

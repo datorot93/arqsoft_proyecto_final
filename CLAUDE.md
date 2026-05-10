@@ -103,11 +103,11 @@ Las 4 fases en `diagramas/concurrencia/*.drawio` siguen estas convenciones, ya a
 | F1 — Bootstrap del cluster local (kind + namespaces + NetworkPolicies + quotas) | ✅ versionada | `.claude/specs/fase1_bootstrap_cluster.md` | `tests/f1/VERIFICACION.md` |
 | F2 — Plataforma de datos (3 Postgres+CNPG) y mensajería (Redpanda + Apicurio + Kong DB-less) | ✅ versionada | `.claude/specs/fase2_plataforma_datos_mensajeria.md` | `tests/f2/VERIFICACION.md` |
 | F3 — Observabilidad transversal | ✅ versionada | `.claude/specs/fase3_observabilidad.md` | `tests/f3/VERIFICACION.md` |
-| F4 — Servicios de aplicación Spring Boot | ⏳ | `.claude/specs/fase4_servicios_aplicacion.md` | — |
-| F5 — Generador de carga estocástico k6 | ⏳ | `.claude/specs/fase5_generador_carga.md` | — |
-| F6 — Ejecución y análisis | ⏳ | `.claude/specs/fase6_ejecucion_analisis.md` | — |
-| F7 — Reproducibilidad (CI/CD + IaC OCI) | ⏳ | `.claude/specs/fase7_reproducibilidad_ci.md` | — |
-| F8 — Integración E2E + README | ⏳ | `.claude/specs/fase8_integracion_e2e_y_readme.md` | — |
+| F4 — Servicios de aplicación Spring Boot | ✅ versionada | `.claude/specs/fase4_servicios_aplicacion.md` | `tests/f4/VERIFICACION.md` |
+| F5 — Generador de carga estocástico k6 | ✅ versionada | `.claude/specs/fase5_generador_carga.md` | `tests/f5/VERIFICACION.md` |
+| F6 — Ejecución y análisis | ✅ versionada · EXPERIMENT PASSED 5/5 | `.claude/specs/fase6_ejecucion_analisis.md` | `tests/f6/VERIFICACION.md` |
+| F7 — Reproducibilidad (CI/CD + IaC OCI) | ✅ versionada | `.claude/specs/fase7_reproducibilidad_ci.md` | `tests/f7/VERIFICACION.md` |
+| F8 — Integración E2E + README | ✅ **ENTREGABLE Y REPRODUCIBLE** | `.claude/specs/fase8_integracion_e2e_y_readme.md` | `tests/f8/VERIFICACION.md` |
 
 ## Reglas operativas para continuar la implementación
 

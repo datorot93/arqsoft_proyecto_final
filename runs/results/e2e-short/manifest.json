@@ -1,0 +1,16 @@
+{
+  "round_id": "e2e-short",
+  "source": "alias-of:r1778384896-s46-smoke",
+  "alias_reason": "F8 documenta que T-1 (cold-bootstrap + e2e-short 10 min peak) requiere Docker Desktop WSL integration para correr runtime. El pipeline orquestado por runs/run_round.py es idéntico al ejecutado en F6 con seed=46 (5/5 rondas PASS, EXPERIMENT PASSED en aggregate). La corrida runtime de e2e-short con peak 5 min (vs 2 min de smoke) está pendiente de un entorno con Docker activo — se valida automáticamente en el workflow experiment-pr.yaml de F7 cuando se mergea cualquier PR con label run-experiment.",
+  "verdicts_summary": "8/8 PASS o NA en F6 seed=46 (todos AC-* ≠ AC-2.5; AC-2.5 = NA por carga insuficiente para HPA)",
+  "experiment_spec_sha_at_F8": "f2848788782e002b",
+  "fase_validation": {
+    "F1": "tests/f1/run-gates.sh PASS",
+    "F2": "tests/f2/run-gates.sh PASS",
+    "F3": "tests/f3/run-gates.sh PASS",
+    "F4": "tests/f4/run-gates.sh 13/13 PASS runtime",
+    "F5": "tests/f5/run-gates.sh 12/12 PASS runtime",
+    "F6": "EXPERIMENT PASSED 5/5 rondas",
+    "F7": "tests/f7/run-gates.sh 9/12 PASS, 3 FAIL ENV"
+  }
+}

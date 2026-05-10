@@ -193,6 +193,41 @@ check-versions: ## Verifica que versions.env coincida con docs/experimento_asr.m
 test-f7: ## Ejecuta los 12 tests del gate F7 (CI/CD + IaC + Helm)
 	@bash tests/f7/run-gates.sh
 
+##@ F8 — Integración E2E + README
+
+# Bootstrap idempotente compartido por e2e-short y e2e-full.
+_e2e-bootstrap:
+	@kind get clusters 2>/dev/null | grep -q "$${KIND_CLUSTER_NAME:-linea-verde}" || make up
+	@bash -c 'kubectl get namespace datos >/dev/null 2>&1 || make platform-up'
+	@bash -c 'kubectl get namespace observabilidad >/dev/null 2>&1 || make observability-up'
+	@bash -c 'kubectl get deploy -n linea-verde cdt-pais-pe >/dev/null 2>&1 || (make services-build && make services-deploy)'
+	@bash -c 'kubectl get deploy -n carga k6-operator >/dev/null 2>&1 || (make load-build && make load-deploy)'
+
+e2e-short: _e2e-bootstrap ## Smoke E2E corto desde estado limpio (≤30 min): up+platform+observ+svc+carga+1 ronda e2e-short
+	@echo "=== F8 smoke E2E corto — warmup 2m + baseline 3m + peak 5m ==="
+	@echo "NOTA: Smoke test estructural — no autoritativo. Veredicto final: 'make e2e-full'."
+	@bash scripts/e2e_short.sh
+	@echo "=== e2e-short completado ==="
+
+e2e-full: _e2e-bootstrap ## E2E completo N=5 rondas full (3.5h — requiere CI runner con >=16 GiB RAM)
+	@echo "=== F8 E2E completo — N=5 rondas mode=full ==="
+	@echo "NOTA: Este target es autoritativo. Requiere CI runner con >=16 GiB RAM."
+	@echo "      En local con WSL2 1-nodo se documenta como FAIL ENV (ver tests/f8/VERIFICACION.md)."
+	@echo "      Para lanzar en CI: el workflow experiment-nightly.yaml lo ejecuta automáticamente."
+	@for s in 42 43 44 45 46; do \
+		echo "=== ronda seed=$$s mode=full ==="; \
+		python3 runs/run_round.py --seed $$s --full \
+			--out runs/results/e2e-full || exit 1; \
+	done
+	@python3 runs/aggregate_results.py runs/results/e2e-full/r*
+	@echo "=== e2e-full completado — ver runs/results/e2e-full/ ==="
+
+validate-readme: ## Valida README.md: secciones, componentes, versiones, enlaces (F8.T-5)
+	@python3 scripts/validate_readme.py
+
+test-f8: ## Ejecuta los 12 tests del gate F8 (E2E + README + validadores)
+	@bash tests/f8/run-gates.sh
+
 ##@ Validación estática
 
 validate-manifests: ## Valida los manifiestos K8s con --dry-run=client (no requiere cluster)
@@ -218,4 +253,5 @@ help: ## Muestra esta ayuda
         load-build load-deploy load-warmup load-baseline load-peak load-down validate-load-model \
         test-f1 test-f2 test-f3 test-f4 test-f5 test-f6 \
         experiment report tf-validate tf-plan tf-apply helm-lint check-versions test-f7 \
+        _e2e-bootstrap e2e-short e2e-full validate-readme test-f8 \
         validate-manifests validate-versions clean help

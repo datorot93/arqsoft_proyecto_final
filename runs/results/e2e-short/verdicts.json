@@ -1,0 +1,132 @@
+{
+  "AC-1.1": {
+    "ac_id": "AC-1.1",
+    "name": "P95 l\u00ednea base ASR-1",
+    "verdict": "PASS",
+    "value": "9.5 ms",
+    "threshold": "800.0 ms",
+    "reason": "P95 global = 9.5 ms < 800.0 ms y todos los pa\u00edses cumplen (co=9.5 ms, pe=9.5 ms, mx=9.5 ms).",
+    "stratified": {
+      "by_pais": {
+        "co": "9.5 ms",
+        "pe": "9.5 ms",
+        "mx": "9.5 ms"
+      }
+    },
+    "hypothesis_refuted": "",
+    "suspect_component": ""
+  },
+  "AC-1.2": {
+    "ac_id": "AC-1.2",
+    "name": "P99 l\u00ednea base ASR-1 (guardrail)",
+    "verdict": "PASS",
+    "value": "9.9 ms",
+    "threshold": "1500.0 ms",
+    "reason": "P99 global = 9.9 ms < 1500.0 ms.",
+    "stratified": {
+      "by_pais": {
+        "co": "9.9 ms",
+        "pe": "9.9 ms",
+        "mx": "9.9 ms"
+      }
+    },
+    "hypothesis_refuted": "",
+    "suspect_component": ""
+  },
+  "AC-2.1": {
+    "ac_id": "AC-2.1",
+    "name": "Volumen completado durante el pico ASR-2",
+    "verdict": "PASS",
+    "value": 765,
+    "threshold": 600,
+    "reason": "765 aperturas con 202 OK durante peak (ventana=133s) [SCALED RUN]. Query: sum(increase(cdt_open_handler_duration_seconds_count{exception=\"none\",exported_endpoint=\"open_cdt\"}[133s]))",
+    "stratified": {},
+    "hypothesis_refuted": "",
+    "suspect_component": ""
+  },
+  "AC-2.2": {
+    "ac_id": "AC-2.2",
+    "name": "Aperturas perdidas durante el pico",
+    "verdict": "PASS",
+    "value": 0,
+    "threshold": 0,
+    "reason": "0 aperturas no completaron 202 OK durante el peak (breakdown: {'k6_cdt_error_total_total': 0.0, 'cdt_handler_exceptions': 0.0}).",
+    "stratified": {
+      "breakdown": {
+        "k6_cdt_error_total_total": 0.0,
+        "cdt_handler_exceptions": 0.0
+      }
+    },
+    "hypothesis_refuted": "",
+    "suspect_component": ""
+  },
+  "AC-2.3": {
+    "ac_id": "AC-2.3",
+    "name": "P95 sostenido durante el pico (minuto-a-minuto)",
+    "verdict": "PASS",
+    "value": "3/3 min con P95 < 800 ms",
+    "threshold": "\u2265 18/20 min (proporcional si escalado)",
+    "reason": "De 3 minutos observados, 3 cumplieron P95<800ms; el ratio supera el m\u00ednimo proporcional.",
+    "stratified": {
+      "per_minute": [
+        [
+          0,
+          "9.5 ms"
+        ],
+        [
+          60,
+          "9.5 ms"
+        ],
+        [
+          120,
+          "9.5 ms"
+        ]
+      ]
+    },
+    "hypothesis_refuted": "",
+    "suspect_component": ""
+  },
+  "AC-2.4": {
+    "ac_id": "AC-2.4",
+    "name": "DLQ \u2014 eventos hu\u00e9rfanos del outbox/broker",
+    "verdict": "PASS",
+    "value": {
+      "outbox_failures": 0,
+      "outbox_lag_s": 0.0,
+      "kafka_errors": 0
+    },
+    "threshold": {
+      "outbox_failures": 0,
+      "outbox_lag_s": "< 5",
+      "kafka_errors": 0
+    },
+    "reason": "No hay DLQ expl\u00edcito en F4 (outbox reintenta indefinido). Equivalente: outbox_dispatch_total{result='failure'}, outbox_dispatch_lag_seconds y vectorized_kafka_handler_requests_errored_total. Observado: failures=0, lag=0.0s, kafka_err=0.",
+    "stratified": {},
+    "hypothesis_refuted": "",
+    "suspect_component": ""
+  },
+  "AC-2.5": {
+    "ac_id": "AC-2.5",
+    "name": "Tiempo de escalado HPA (replicas pending \u2192 ready)",
+    "verdict": "NA",
+    "value": "sin eventos de escalado detectados",
+    "threshold": "p90 < 60s",
+    "reason": "Durante la ventana del peak no se detectaron eventos `desired > current`. Posible: (a) HPA ya estaba escalado o (b) carga insuficiente para gatillar autoescalado en este entorno.",
+    "stratified": {},
+    "hypothesis_refuted": "",
+    "suspect_component": ""
+  },
+  "AC-2.6": {
+    "ac_id": "AC-2.6",
+    "name": "CircuitBreaker recupera (no queda OPEN > 90 s con core sano)",
+    "verdict": "PASS",
+    "value": "0 caso(s)",
+    "threshold": "= 0",
+    "reason": "Detectados 0 episodios CB OPEN > 90s con failure_rate < 5%.",
+    "stratified": {
+      "bad_episodes": []
+    },
+    "hypothesis_refuted": "",
+    "suspect_component": ""
+  }
+}

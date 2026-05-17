@@ -38,7 +38,6 @@ nodes:
     image: kindest/node:v1.30.4
     labels:
       topology.kubernetes.io/zone: ad-1
-      app.kubernetes.io/part-of: linea-verde-experimento
     kubeadmConfigPatches:
       - |
         kind: JoinConfiguration
@@ -50,7 +49,6 @@ nodes:
     image: kindest/node:v1.30.4
     labels:
       topology.kubernetes.io/zone: ad-2
-      app.kubernetes.io/part-of: linea-verde-experimento
     kubeadmConfigPatches:
       - |
         kind: JoinConfiguration
@@ -62,7 +60,6 @@ nodes:
     image: kindest/node:v1.30.4
     labels:
       topology.kubernetes.io/zone: ad-3
-      app.kubernetes.io/part-of: linea-verde-experimento
     kubeadmConfigPatches:
       - |
         kind: JoinConfiguration

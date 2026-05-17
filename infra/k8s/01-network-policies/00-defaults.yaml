@@ -114,10 +114,11 @@ spec:
   egress:  [{ to:   [{ podSelector: {} }] }]
 
 # =================================================================
-# ALLOW-APISERVER-EGRESS — pods de cada namespace pueden alcanzar el API server
-# (10.96.0.1:443, primera IP del serviceSubnet 10.96.0.0/16).
-# Necesario para operadores como CNPG cuyos pods consultan CRs vía kube API.
-# En entornos con NetworkPolicy enforcing (kind multi-node, OKE) esto es bloqueante.
+# ALLOW-APISERVER-EGRESS — pods de cada namespace pueden alcanzar el API server.
+# kindnet evalúa NetworkPolicies DESPUÉS del DNAT de kube-proxy: el paquete a
+# 10.96.0.1:443 ya fue reescrito a <nodo-control-plane>:6443 cuando la NP lo ve.
+# Por eso se usa el rango de la red Docker de kind (172.18.0.0/16) y puerto 6443.
+# En OKE (Calico/VCN-native, evaluación pre-DNAT) se usaría 10.96.0.1/32:443.
 # =================================================================
 ---
 apiVersion: networking.k8s.io/v1
@@ -127,8 +128,8 @@ spec:
   podSelector: {}
   policyTypes: [Egress]
   egress:
-    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
-      ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ ipBlock: { cidr: 172.18.0.0/16 } }]
+      ports: [{ protocol: TCP, port: 6443 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -137,8 +138,8 @@ spec:
   podSelector: {}
   policyTypes: [Egress]
   egress:
-    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
-      ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ ipBlock: { cidr: 172.18.0.0/16 } }]
+      ports: [{ protocol: TCP, port: 6443 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -147,8 +148,8 @@ spec:
   podSelector: {}
   policyTypes: [Egress]
   egress:
-    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
-      ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ ipBlock: { cidr: 172.18.0.0/16 } }]
+      ports: [{ protocol: TCP, port: 6443 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -157,8 +158,8 @@ spec:
   podSelector: {}
   policyTypes: [Egress]
   egress:
-    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
-      ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ ipBlock: { cidr: 172.18.0.0/16 } }]
+      ports: [{ protocol: TCP, port: 6443 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -167,8 +168,8 @@ spec:
   podSelector: {}
   policyTypes: [Egress]
   egress:
-    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
-      ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ ipBlock: { cidr: 172.18.0.0/16 } }]
+      ports: [{ protocol: TCP, port: 6443 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -177,8 +178,8 @@ spec:
   podSelector: {}
   policyTypes: [Egress]
   egress:
-    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
-      ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ ipBlock: { cidr: 172.18.0.0/16 } }]
+      ports: [{ protocol: TCP, port: 6443 }]
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -187,8 +188,8 @@ spec:
   podSelector: {}
   policyTypes: [Egress]
   egress:
-    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
-      ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ ipBlock: { cidr: 172.18.0.0/16 } }]
+      ports: [{ protocol: TCP, port: 6443 }]
 
 # =================================================================
 # ALLOW-DNS por namespace (8 NetworkPolicies, todo namespace necesita resolver Services)

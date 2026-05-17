@@ -114,6 +114,83 @@ spec:
   egress:  [{ to:   [{ podSelector: {} }] }]
 
 # =================================================================
+# ALLOW-APISERVER-EGRESS — pods de cada namespace pueden alcanzar el API server
+# (10.96.0.1:443, primera IP del serviceSubnet 10.96.0.0/16).
+# Necesario para operadores como CNPG cuyos pods consultan CRs vía kube API.
+# En entornos con NetworkPolicy enforcing (kind multi-node, OKE) esto es bloqueante.
+# =================================================================
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-apiserver-egress, namespace: datos }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-apiserver-egress, namespace: asincrono }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-apiserver-egress, namespace: linea-verde }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-apiserver-egress, namespace: borde }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-apiserver-egress, namespace: acl }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-apiserver-egress, namespace: core-stub }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: allow-apiserver-egress, namespace: carga }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 10.96.0.1/32 } }]
+      ports: [{ protocol: TCP, port: 443 }]
+
+# =================================================================
 # ALLOW-DNS por namespace (8 NetworkPolicies, todo namespace necesita resolver Services)
 # =================================================================
 ---

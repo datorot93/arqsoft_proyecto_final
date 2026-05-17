@@ -183,7 +183,7 @@ echo
 echo "[T-5 · BLOQUEANTE] report.html > 50 KB, sin recursos externos"
 HTML="$ROUND_DIR/report.html"
 if [ -f "$HTML" ]; then
-  SIZE=$(stat -c%s "$HTML")
+  SIZE=$(stat -c%s "$HTML" 2>/dev/null || stat -f '%z' "$HTML")
   if [ "$SIZE" -gt 50000 ]; then
     EXT_SRC=$(grep -cE 'src="https?://|href="https?://' "$HTML" || true)
     SVGS=$(grep -c '<svg' "$HTML" || true)

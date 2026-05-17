@@ -50,7 +50,12 @@ else
   echo "  actionlint no encontrado, intentando instalar..."
   ALINT_VER="1.7.3"
   TMP_DIR=$(mktemp -d)
-  if curl -sSL "https://github.com/rhysd/actionlint/releases/download/v${ALINT_VER}/actionlint_${ALINT_VER}_linux_amd64.tar.gz" \
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64)  ALINT_OS="darwin_arm64"  ;;
+    Darwin-x86_64) ALINT_OS="darwin_amd64"  ;;
+    *)             ALINT_OS="linux_amd64"   ;;
+  esac
+  if curl -sSL "https://github.com/rhysd/actionlint/releases/download/v${ALINT_VER}/actionlint_${ALINT_VER}_${ALINT_OS}.tar.gz" \
        -o "$TMP_DIR/al.tgz" 2>/dev/null && \
      tar -xz -C "$TMP_DIR" -f "$TMP_DIR/al.tgz" 2>/dev/null; then
     ACTIONLINT="$TMP_DIR/actionlint"

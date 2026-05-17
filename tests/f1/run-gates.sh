@@ -46,6 +46,13 @@ run_test() {
   fi
 }
 
+# Nodos esperados según plataforma (single-node en Mac, 4 en Linux/CI)
+if [ "$(uname -s)" = "Darwin" ]; then
+  EXPECTED_NODES=1
+else
+  EXPECTED_NODES=4
+fi
+
 # ----- precondiciones -----
 section "Pruebas de salida F1 — Bootstrap del cluster local"
 echo "Cluster esperado: kind-$KIND_CLUSTER_NAME"
@@ -65,18 +72,18 @@ run_test "F1.T-2" "Versión K8s 1.30.x" \
   "^v1\\.30\\." "BLOQUEANTE"
 
 # ----- F1.T-3 -----
-run_test "F1.T-3" "4 nodos exactos" \
-  "kubectl get nodes --no-headers | wc -l" \
-  "^4$" "BLOQUEANTE"
+run_test "F1.T-3" "${EXPECTED_NODES} nodo(s) en el cluster (4 en CI, 1 en Mac single-node)" \
+  "kubectl get nodes --no-headers | wc -l | tr -d ' '" \
+  "^${EXPECTED_NODES}$" "BLOQUEANTE"
 
 # ----- F1.T-4 -----
-run_test "F1.T-4" "metrics-server operativo" \
-  "kubectl top nodes --no-headers | wc -l" \
-  "^4$" "BLOQUEANTE"
+run_test "F1.T-4" "metrics-server operativo (${EXPECTED_NODES} nodo(s))" \
+  "kubectl top nodes --no-headers | wc -l | tr -d ' '" \
+  "^${EXPECTED_NODES}$" "BLOQUEANTE"
 
 # ----- F1.T-5 -----
 run_test "F1.T-5" "8 namespaces operativos creados" \
-  "kubectl get ns -l app.kubernetes.io/part-of=linea-verde-experimento --no-headers | wc -l" \
+  "kubectl get ns -l app.kubernetes.io/part-of=linea-verde-experimento --no-headers | wc -l | tr -d ' '" \
   "^8$" "BLOQUEANTE"
 
 # ----- F1.T-6 — verificación estructural Y conductual de la NetworkPolicy -----
@@ -98,7 +105,7 @@ run_test "F1.T-6c" "Pod en linea-verde recibe HTTP 000 al intentar core-stub.svc
 
 # ----- F1.T-7 -----
 run_test "F1.T-7" "ResourceQuotas aplicadas en al menos 8 namespaces" \
-  "kubectl get resourcequota -A --no-headers | grep -E 'borde|linea-verde|datos|asincrono|acl|core-stub|observabilidad|carga' | wc -l" \
+  "kubectl get resourcequota -A --no-headers | grep -E 'borde|linea-verde|datos|asincrono|acl|core-stub|observabilidad|carga' | wc -l | tr -d ' '" \
   "^[8-9]$|^[1-9][0-9]+$" "BLOQUEANTE"
 
 # ----- F1.T-8 -----

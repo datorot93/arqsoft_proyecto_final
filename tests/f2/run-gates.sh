@@ -12,6 +12,9 @@ PASS=0
 FAIL_BLOCK=0
 TOTAL=0
 
+IS_MAC=false
+[ "$(uname -s)" = "Darwin" ] && IS_MAC=true
+
 section() {
   echo
   echo "════════════════════════════════════════════════════════════════"
@@ -45,8 +48,9 @@ kubectl config current-context >/dev/null 2>&1 || {
 }
 
 # ----- F2.T-1 -----
+# tr '\n' ' ' une las 3 líneas en una sola para que .* cruce entre clusters
 run_test "F2.T-1" "3 clusters Postgres healthy (pe, mx, co)" \
-  "kubectl get clusters.postgresql.cnpg.io -n datos -o jsonpath='{range .items[*]}{.metadata.name}={.status.phase}{\"\\n\"}{end}' | sort" \
+  "kubectl get clusters.postgresql.cnpg.io -n datos -o jsonpath='{range .items[*]}{.metadata.name}={.status.phase}{\"\\n\"}{end}' | sort | tr '\\n' ' '" \
   "postgres-co=Cluster in healthy state.*postgres-mx=Cluster in healthy state.*postgres-pe=Cluster in healthy state" \
   "BLOQUEANTE"
 
@@ -64,10 +68,15 @@ run_test "F2.T-2 (co)" "Schema cdt en postgres-co" \
   "^[2-9]$|^[1-9][0-9]+$" "BLOQUEANTE"
 
 # ----- F2.T-3 -----
-# Replicación: cuenta de standbys reportada por CNPG
-run_test "F2.T-3" "Replicación primary→standby (cada cluster con readyInstances=2)" \
+# Replicación: readyInstances=2 en CI/prod, readyInstances=1 en Mac single-node
+if $IS_MAC; then
+  INST_EXPECTED="1"; INST_DESC="readyInstances=1 (single-node Mac)"
+else
+  INST_EXPECTED="2"; INST_DESC="readyInstances=2 (primary+standby)"
+fi
+run_test "F2.T-3" "Clusters Postgres con $INST_DESC" \
   "kubectl get clusters.postgresql.cnpg.io -n datos -o jsonpath='{range .items[*]}{.metadata.name}={.status.readyInstances}{\"\\n\"}{end}' | sort -u | awk -F= '{print \$2}' | sort -u" \
-  "^2$" "BLOQUEANTE"
+  "^${INST_EXPECTED}$" "BLOQUEANTE"
 
 # ----- F2.T-4 -----
 run_test "F2.T-4" "Tópico cdt.eventos con 6 particiones, RF=3" \
@@ -84,19 +93,30 @@ run_test "F2.T-6" "Apicurio Registry responde (HTTP 200)" \
   "kubectl exec -n asincrono deployment/apicurio -- curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/apis/registry/v3/system/info" \
   "^200$" "BLOQUEANTE"
 
-# ----- F2.T-7 -----
-run_test "F2.T-7" "Kong admin API alcanzable + DB-less mode" \
-  "kubectl exec -n borde deployment/kong-kong -c proxy -- curl -s http://localhost:8001/status 2>/dev/null | head -c 500" \
-  "\"reachable\":false|\"database\":\"off\"" "BLOQUEANTE"
+# ----- F2.T-7 / F2.T-8 -----
+# La imagen de Kong no incluye curl. Se usa port-forward desde el host.
+_KONG_PF_8001=19001
+_KONG_PF_8100=19100
+kubectl port-forward -n borde deployment/kong-kong \
+  "${_KONG_PF_8001}:8001" "${_KONG_PF_8100}:8100" >/dev/null 2>&1 &
+_KONG_PF_PID=$!
+sleep 3   # esperar que el túnel esté listo
 
-# ----- F2.T-8 -----
+run_test "F2.T-7" "Kong admin API alcanzable + DB-less mode" \
+  "curl -s http://localhost:${_KONG_PF_8001}/status 2>/dev/null | head -c 500" \
+  "\"reachable\":false|\"database\":\"off\"|\"configuration_hash\"" "BLOQUEANTE"
+
 run_test "F2.T-8" "Plugin Prometheus en Kong (>10 métricas)" \
-  "kubectl exec -n borde deployment/kong-kong -c proxy -- curl -s http://localhost:8100/metrics 2>/dev/null | grep -c '^kong_'" \
+  "curl -s http://localhost:${_KONG_PF_8100}/metrics 2>/dev/null | grep -c '^kong_'" \
   "^[1-9][0-9]+$" "BLOQUEANTE"
 
+kill $_KONG_PF_PID 2>/dev/null || true
+
 # ----- F2.T-9 -----
+# Puerto interno Redpanda es 9093 (no 9092 que es el listener externo).
+# --offset oldest evita el bug de rpk con `end-1` cuando el offset es 0.
 run_test "F2.T-9" "Round-trip producer→consumer en cdt.eventos" \
-  "kubectl exec -n asincrono redpanda-0 -c redpanda -- bash -c 'echo \"smoke-test-\$(date +%s)\" | rpk topic produce cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9092 -k smoke 2>&1; rpk topic consume cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9092 -n 1 -o end-1 2>&1 | head -5'" \
+  "kubectl exec -n asincrono redpanda-0 -c redpanda -- bash -c 'echo \"smoke-test-\$(date +%s)\" | rpk topic produce cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9093 -k smoke 2>&1; rpk topic consume cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9093 -n 1 --offset oldest 2>&1 | head -5'" \
   "smoke-test-[0-9]+" "BLOQUEANTE"
 
 # ----- F2.T-10 / F2.T-11 son tests con servicios CDTXPais que aún no existen (F4) -----

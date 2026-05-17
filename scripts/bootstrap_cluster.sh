@@ -34,7 +34,11 @@ docker info >/dev/null 2>&1 || die "Docker no está corriendo (inicia Docker Des
 ok "Docker daemon activo"
 
 # Verificación de RAM
-RAM_GB=$(free -g | awk '/^Mem:/{print $2}')
+if command -v free >/dev/null 2>&1; then
+  RAM_GB=$(free -g | awk '/^Mem:/{print $2}')
+else
+  RAM_GB=$(( $(sysctl -n hw.memsize) / 1024 / 1024 / 1024 ))
+fi
 if [ "$RAM_GB" -lt 14 ]; then
   warn "Solo $RAM_GB GB de RAM disponibles (recomendado >= 14 GB). Continuando..."
 else
@@ -50,12 +54,23 @@ done
 ok "Puertos 80, 443, 6443 libres"
 
 # ----- 2. cluster kind (idempotente) -----
+# Seleccionar config según plataforma: single-node en macOS (Docker Desktop no
+# soporta multi-node kind por cgroups), multi-node en Linux/WSL2.
+if [ "$(uname -s)" = "Darwin" ]; then
+  KIND_CONFIG="$ROOT_DIR/infra/kind/cluster-mac.yaml"
+  EXPECTED_NODES=1
+  warn "macOS detectado — usando config single-node (cluster-mac.yaml). Ver docs en CLAUDE.md §Limitaciones."
+else
+  KIND_CONFIG="$ROOT_DIR/infra/kind/cluster.yaml"
+  EXPECTED_NODES=4
+fi
+
 say "Aprovisionando cluster '$KIND_CLUSTER_NAME'"
 if kind get clusters 2>/dev/null | grep -q "^${KIND_CLUSTER_NAME}$"; then
   ok "Cluster ya existe; saltando 'kind create'"
 else
   kind create cluster \
-    --config "$ROOT_DIR/infra/kind/cluster.yaml" \
+    --config "$KIND_CONFIG" \
     --image "$KIND_NODE_IMAGE" \
     --wait 5m
   ok "Cluster creado"
@@ -66,9 +81,9 @@ kubectl config use-context "kind-${KIND_CLUSTER_NAME}" >/dev/null
 ok "Contexto kubectl: kind-${KIND_CLUSTER_NAME}"
 
 # Esperar nodos Ready
-say "Esperando que los 4 nodos queden Ready"
+say "Esperando que los $EXPECTED_NODES nodo(s) queden Ready"
 kubectl wait --for=condition=Ready node --all --timeout=180s
-ok "4 nodos Ready"
+ok "$EXPECTED_NODES nodo(s) Ready"
 
 # ----- 3. metrics-server -----
 say "Instalando metrics-server (chart $METRICS_SERVER_CHART_VERSION)"

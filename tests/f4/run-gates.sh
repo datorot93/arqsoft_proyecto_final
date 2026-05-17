@@ -65,6 +65,34 @@ kubectl config current-context >/dev/null 2>&1 || {
   exit 2
 }
 
+# ----- Port-forwards para Mac/Linux sin NodePort -----
+# Kong proxy (ClusterIP :80) → localhost:18080
+# Prometheus      (ClusterIP :9090) → localhost:19090
+_PF_KONG_PORT=18080
+_PF_PROM_PORT=19090
+_PF_PIDS=()
+
+if ! curl -s --max-time 1 "${KONG_URL}/v1/cdt" -o /dev/null 2>/dev/null; then
+  kubectl port-forward -n borde svc/kong-kong-proxy \
+    "${_PF_KONG_PORT}:80" >/dev/null 2>&1 &
+  _PF_PIDS+=($!)
+  KONG_HOST="localhost"
+  KONG_PORT="${_PF_KONG_PORT}"
+  KONG_URL="http://${KONG_HOST}:${KONG_PORT}"
+  sleep 3
+fi
+
+if ! curl -s --max-time 1 "${PROM_URL}/-/healthy" -o /dev/null 2>/dev/null; then
+  kubectl port-forward -n observabilidad svc/kube-prometheus-stack-prometheus \
+    "${_PF_PROM_PORT}:9090" >/dev/null 2>&1 &
+  _PF_PIDS+=($!)
+  PROM_URL="http://localhost:${_PF_PROM_PORT}"
+  sleep 2
+fi
+
+cleanup_pf() { for pid in "${_PF_PIDS[@]:-}"; do kill "$pid" 2>/dev/null || true; done; }
+trap cleanup_pf EXIT
+
 # =================================================================
 # F4.T-1 — POST /v1/cdt retorna 202 con cdtId UUID v4
 # =================================================================
@@ -172,11 +200,10 @@ if [ -n "$CDT_UUID" ]; then
     -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
   if [ -n "$RPK_POD" ]; then
-    # Leer los últimos 200 mensajes (lee -200 en cada una de las 6 particiones,
-    # corta a num=200 globalmente) — suficiente para capturar el evento recién publicado.
-    # Sintaxis rpk: --offset -N (no @-N), --fetch-max-wait (no --timeout).
+    # Leer hasta 20 mensajes recientes. timeout 15 evita bloqueo si el topic tiene
+    # menos mensajes que --num (rpk consume esperaría indefinidamente sin él).
     T4_MSG=$(kubectl exec -n asincrono "$RPK_POD" -- \
-      rpk topic consume cdt.eventos --offset -200 --num 200 --fetch-max-wait 5s 2>/dev/null \
+      timeout 15 rpk topic consume cdt.eventos --offset -20 --num 20 --fetch-max-wait 5s 2>/dev/null \
       | grep "$CDT_UUID" || echo "")
 
     if [ -n "$T4_MSG" ]; then

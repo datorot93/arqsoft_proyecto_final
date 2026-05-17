@@ -81,6 +81,36 @@ spec:
   policyTypes: [Egress]
   egress:
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } } }]
+---
+# CNPG operator (cnpg-system) → instance managers (datos:8000 HTTPS)
+# Sin esta regla el operador no puede extraer el status de los pods y el
+# cluster nunca transiciona a "Cluster in healthy state".
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: datos-ingress-from-cnpg-operator, namespace: datos }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: cnpg-system } }
+      ports:
+        - { port: 8000, protocol: TCP }
+---
+# Instance managers (datos) → kube-apiserver (serviceSubnet 10.96.0.0/16 :443)
+# El instance manager usa el service account del pod para reportar status
+# al API server via https://kubernetes.default.svc.cluster.local:443.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: datos-egress-kube-apiserver, namespace: datos }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: { cidr: 10.96.0.0/16 }
+      ports:
+        - { port: 443, protocol: TCP }
 
 # =================================================================
 # asincrono — recibe de linea-verde (productor) y acl (consumer del outbox)
@@ -106,6 +136,19 @@ spec:
   policyTypes: [Egress]
   egress:
     - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } } }]
+---
+# Redpanda initContainer lee labels del nodo y reporta status al API server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: asincrono-egress-kube-apiserver, namespace: asincrono }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: { cidr: 10.96.0.0/16 }
+      ports:
+        - { port: 443, protocol: TCP }
 
 # =================================================================
 # acl — único punto autorizado a egresar hacia core-stub

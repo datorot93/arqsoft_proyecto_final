@@ -16,6 +16,13 @@ ok()  { printf "\033[1;32m✓\033[0m %s\n" "$*"; }
 warn(){ printf "\033[1;33m!\033[0m %s\n" "$*" >&2; }
 die() { printf "\033[1;31m✗ ERROR:\033[0m %s\n" "$*" >&2; exit 1; }
 
+# Detección de plataforma: single-node en Mac → Postgres instances=1, Redpanda replicas=1 RF=1
+IS_MAC=false
+if [ "$(uname -s)" = "Darwin" ]; then
+  IS_MAC=true
+  warn "macOS single-node: Postgres instances=1, Redpanda replicas=1 RF=1"
+fi
+
 # ----- precondición: F1 -----
 say "Verificando que F1 esté aplicada"
 kubectl get ns linea-verde >/dev/null 2>&1 || die "Namespace 'linea-verde' no existe. Corre 'make up' (F1) primero."
@@ -44,9 +51,13 @@ ok "Bootstrap SQL listo"
 
 # ----- 3. 3 clusters Postgres por país -----
 say "Aprovisionando 3 clusters PostgreSQL (pe, mx, co)"
-kubectl apply -f "$ROOT_DIR/infra/k8s/datos/cluster-pe.yaml"
-kubectl apply -f "$ROOT_DIR/infra/k8s/datos/cluster-mx.yaml"
-kubectl apply -f "$ROOT_DIR/infra/k8s/datos/cluster-co.yaml"
+for pais in pe mx co; do
+  if $IS_MAC; then
+    sed 's/instances: 2/instances: 1/' "$ROOT_DIR/infra/k8s/datos/cluster-$pais.yaml" | kubectl apply -f -
+  else
+    kubectl apply -f "$ROOT_DIR/infra/k8s/datos/cluster-$pais.yaml"
+  fi
+done
 
 say "Esperando a que los 3 clusters estén Ready (puede tardar ~3-5 min)"
 for pais in pe mx co; do
@@ -65,17 +76,31 @@ ok "NetworkPolicies cross-país aplicadas"
 say "Instalando Redpanda $REDPANDA_VERSION"
 helm repo add redpanda https://charts.redpanda.com >/dev/null 2>&1 || true
 helm repo update redpanda >/dev/null
-helm upgrade --install redpanda redpanda/redpanda \
-  --namespace asincrono \
-  -f "$ROOT_DIR/infra/helm/redpanda/values.yaml" \
-  --wait --timeout 5m
+if $IS_MAC; then
+  helm upgrade --install redpanda redpanda/redpanda \
+    --namespace asincrono \
+    -f "$ROOT_DIR/infra/helm/redpanda/values.yaml" \
+    --set statefulset.replicas=1 \
+    --set config.cluster.default_topic_replications=1 \
+    --set rackAwareness.enabled=false \
+    --wait --timeout 5m
+else
+  helm upgrade --install redpanda redpanda/redpanda \
+    --namespace asincrono \
+    -f "$ROOT_DIR/infra/helm/redpanda/values.yaml" \
+    --wait --timeout 5m
+fi
 ok "Redpanda desplegado"
 
 # ----- 6. Crear tópicos cdt.eventos y DLQ -----
-say "Creando tópicos cdt.eventos (6 part, RF=3) y cdt.eventos.DLQ"
-# Eliminar Job previo si existe (para que sea idempotente)
+say "Creando tópicos cdt.eventos (6 part) y cdt.eventos.DLQ"
 kubectl delete job redpanda-create-topics -n asincrono --ignore-not-found
-kubectl apply -f "$ROOT_DIR/infra/k8s/asincrono/topics-job.yaml"
+if $IS_MAC; then
+  # RF=1 en single-node (no hay 3 brokers para RF=3)
+  sed 's/--replicas 3/--replicas 1/g' "$ROOT_DIR/infra/k8s/asincrono/topics-job.yaml" | kubectl apply -f -
+else
+  kubectl apply -f "$ROOT_DIR/infra/k8s/asincrono/topics-job.yaml"
+fi
 kubectl wait --for=condition=Complete job/redpanda-create-topics -n asincrono --timeout=120s
 ok "Tópicos creados"
 

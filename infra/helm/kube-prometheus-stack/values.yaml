@@ -45,7 +45,7 @@ prometheus:
     resources:
       requests:
         cpu: 200m
-        memory: 512Mi
+        memory: 128Mi
       limits:
         cpu: 1000m
         memory: 2Gi
@@ -157,6 +157,9 @@ grafana:
       folderAnnotation: grafana_folder
       provider:
         foldersFromFilesStructure: true
+    datasources:
+      enabled: false
+      defaultDatasourceEnabled: false
 
   # Datasource de Prometheus ya viene configurado por defecto en kube-prometheus-stack.
   # Se personaliza para enriquecer la config con Tempo exemplars.

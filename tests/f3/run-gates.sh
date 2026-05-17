@@ -112,8 +112,10 @@ echo "[F3.T-3 · BLOQUEANTE] Tempo recibe trazas via OTel Collector"
 echo "  Inyectando span de prueba via curl (protocolo OTLP/HTTP al Service)..."
 
 # Generar un traceID y spanID aleatorios
-TRACE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '-' || echo "$(date +%s)abcdef1234567890abcdef12")
-SPAN_ID="$(date +%s%N | head -c 16 || echo "abcdef1234567890")"
+TRACE_ID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null | tr -d '-' \
+  || uuidgen 2>/dev/null | tr -d '-' | tr '[:upper:]' '[:lower:]' \
+  || echo "$(date +%s)abcdef1234567890abcdef12")
+SPAN_ID="$(python3 -c 'import time; print(format(int(time.time()*1e9), "016x"))' 2>/dev/null || echo "abcdef1234567890")"
 
 OTLP_PAYLOAD=$(cat <<EOF
 {
@@ -189,7 +191,7 @@ echo "[F3.T-4 · BLOQUEANTE] Loki recibe logs JSON"
 echo "  Inyectando log de prueba..."
 
 TOTAL=$((TOTAL + 1))
-TS_NS="$(date +%s%N)"
+TS_NS="$(python3 -c 'import time; print(int(time.time()*1e9))' 2>/dev/null || date +%s)000000000"
 LOKI_PUSH=$(kubectl exec -n observabilidad \
   "$(kubectl get pod -n observabilidad -l app.kubernetes.io/name=loki -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)" -- \
   wget -qO- --post-data="{\"streams\":[{\"stream\":{\"app\":\"test-loki-ingest\",\"namespace\":\"observabilidad\"},\"values\":[[\"${TS_NS}\",\"{\\\"level\\\":\\\"INFO\\\",\\\"message\\\":\\\"f3-test-probe\\\",\\\"traceId\\\":\\\"abc123\\\"}\" ]]}]}" \

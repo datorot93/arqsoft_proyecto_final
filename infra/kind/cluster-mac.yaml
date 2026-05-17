@@ -1,0 +1,44 @@
+# F1 — Bootstrap cluster local (macOS / Docker Desktop)
+# Config single-node. Fixes aplicados para Docker Desktop + Apple Silicon:
+#   1. containerdConfigPatches: SystemdCgroup=false (Docker Desktop usa cgroupv2 via cgroupfs)
+#   2. KubeletConfiguration: cgroupDriver=cgroupfs + failSwapOn=false
+#   3. app.kubernetes.io/part-of en labels: (no en --node-labels, que K8s 1.30 restringe)
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: linea-verde
+
+networking:
+  apiServerAddress: "127.0.0.1"
+  apiServerPort: 6443
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/16"
+
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+        SystemdCgroup = false
+
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.30.4
+    labels:
+      app.kubernetes.io/part-of: linea-verde-experimento
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true,topology.kubernetes.io/zone=ad-1"
+      - |
+        kind: KubeletConfiguration
+        cgroupDriver: cgroupfs
+        failSwapOn: false

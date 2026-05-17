@@ -113,12 +113,13 @@ f6-rounds: ## Lanza N=5 rondas con seeds 42..46 (mode=$${MODE:-scaled})
 f6-aggregate: ## Genera aggregate.html sobre runs/results/r* (idempotente)
 	@python3 runs/aggregate_results.py runs/results/r*
 
-f6-report: ## Abre el último report.html en navegador (xdg-open / wsl-open)
+f6-report: ## Abre el último report.html en navegador (open / xdg-open / wsl-open)
 	@latest=$$(ls -dt runs/results/r*-s*-* 2>/dev/null | head -1); \
 	if [ -z "$$latest" ]; then echo "sin rondas"; exit 1; fi; \
 	report="$$latest/report.html"; \
 	echo "→ $$report"; \
 	if command -v wslview >/dev/null; then wslview "$$report"; \
+	elif command -v open >/dev/null; then open "$$report"; \
 	elif command -v xdg-open >/dev/null; then xdg-open "$$report"; \
 	else echo "abrir manualmente: $$report"; fi
 
@@ -145,6 +146,7 @@ report: ## Genera reporte agregado y lo abre (requiere rondas previas en runs/re
 	report="$$latest/report.html"; \
 	echo "→ $$report"; \
 	if command -v wslview >/dev/null; then wslview "$$report"; \
+	elif command -v open >/dev/null; then open "$$report"; \
 	elif command -v xdg-open >/dev/null; then xdg-open "$$report"; \
 	else echo "Abrir manualmente: $$report"; fi
 

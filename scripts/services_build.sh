@@ -31,8 +31,8 @@ echo ""
 
 cd "$SERVICES_DIR"
 
-# Opción 1: Si hay registry local de kind corriendo
-if nc -z kind-registry 5000 2>/dev/null || nc -z localhost 5000 2>/dev/null; then
+# Opción 1: Si hay registry local de kind corriendo (solo kind-registry:5000, no localhost)
+if nc -z kind-registry 5000 2>/dev/null; then
   echo "Registry local detectada. Publicando con jib..."
   export REGISTRY="${REGISTRY:-kind-registry:5000}"
   ./gradlew :cdt-pais:jib :acl:jib :outbox-dispatcher:jib :core-stub:jib \

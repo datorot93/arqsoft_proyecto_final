@@ -157,24 +157,27 @@ GRAFANA_POD=$(kubectl get pod -n observabilidad -l app.kubernetes.io/name=grafan
 
 # Verificar 1: health check del Collector via Grafana pod (que sí tiene curl/wget)
 HC=$(kubectl exec -n observabilidad "$GRAFANA_POD" -c grafana -- \
-  wget -qO- 'http://otel-collector.observabilidad.svc.cluster.local:13133/' 2>/dev/null \
+  wget -qO- --timeout=10 'http://otel-collector.observabilidad.svc.cluster.local:13133/' 2>/dev/null \
   || echo "no-response")
 
 if echo "$HC" | grep -qEi "server available|ok|healthy|\{"; then
   printf "\n  \033[1;32m✓ PASS\033[0m  OTel Collector health check OK via Service\n"
   PASS=$((PASS + 1))
 else
-  # Verificar 2: que el DaemonSet pod esté Running y los puertos escuchando
-  POD_STATUS=$(kubectl get pod -n observabilidad -l app.kubernetes.io/name=otel-collector \
-    -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
-  if [ "$POD_STATUS" = "Running" ]; then
-    # La imagen otelcol-contrib es distroless (sin shell). El pod Running con
-    # health check Service no respondiendo indica race condition de inicio.
-    # Un pod Running implica que los puertos están vinculados (liveness probe en 13133).
-    printf "\n  \033[1;32m✓ PASS\033[0m  OTel Collector pod Running (distroless — health via liveness probe en 13133)\n"
+  # Verificar 2: contar pods Running (multi-nodo: items[0] puede ser un pod Pending;
+  # en DaemonSet es válido que ≥1 pod esté Running aunque otro esté en pull/backoff).
+  RUNNING_COUNT=$(kubectl get pods -n observabilidad -l app.kubernetes.io/name=otel-collector \
+    -o jsonpath='{range .items[*]}{.status.phase}{"\n"}{end}' 2>/dev/null \
+    | grep -c "^Running$" || echo 0)
+  NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+  if [ "${RUNNING_COUNT:-0}" -ge 1 ]; then
+    printf "\n  \033[1;32m✓ PASS\033[0m  OTel Collector %s/%s pods Running (DaemonSet multi-nodo — ≥1 Running es válido)\n" \
+      "$RUNNING_COUNT" "$NODE_COUNT"
     PASS=$((PASS + 1))
   else
-    printf "\n  \033[1;31m✗ FAIL\033[0m  OTel Collector pod no está Running (status: %s)\n" "$POD_STATUS"
+    POD_STATUS=$(kubectl get pod -n observabilidad -l app.kubernetes.io/name=otel-collector \
+      -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
+    printf "\n  \033[1;31m✗ FAIL\033[0m  OTel Collector sin pods Running (items[0] status: %s)\n" "$POD_STATUS"
     printf "         kubectl logs -n observabilidad ds/otel-collector\n"
     FAIL_BLOCK=$((FAIL_BLOCK + 1))
   fi

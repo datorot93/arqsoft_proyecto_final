@@ -103,6 +103,9 @@ test-f5: ## Ejecuta los 12 tests del gate F5
 f6-round: ## Lanza UNA ronda (warmup+baseline+peak). Variables: SEED=42 MODE=smoke|scaled|full
 	@python3 runs/run_round.py --seed $${SEED:-42} --$${MODE:-scaled}
 
+smoke-run: ## Atajo: ronda smoke (30s warmup + 2min baseline + 3min peak a 100 r/s). Variable: SEED=42
+	@python3 runs/run_round.py --seed $${SEED:-42} --smoke
+
 f6-rounds: ## Lanza N=5 rondas con seeds 42..46 (mode=$${MODE:-scaled})
 	@for s in 42 43 44 45 46; do \
 		echo "=== ronda seed=$$s ==="; \

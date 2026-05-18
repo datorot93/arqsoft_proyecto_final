@@ -1,0 +1,61 @@
+# TestRun CR para el escenario `stress_100rps` (10 min · ramp hasta 100 r/s).
+# Objetivo: superar el techo de 36 r/s del peak ASR-2 y explorar capacidad.
+#
+# preAllocatedVUs=200 / maxVUs=400 para soportar 100 r/s con latencias >600 ms.
+# resources aumentados respecto al peak (más VUs = más CPU en el pod k6).
+
+---
+apiVersion: k6.io/v1alpha1
+kind: TestRun
+metadata:
+  name: k6-stress
+  namespace: carga
+  labels:
+    app.kubernetes.io/part-of: linea-verde-experimento
+    componente: load-runner
+    fase: stress
+spec:
+  parallelism: 1
+  cleanup: post
+  arguments: >-
+    --tag testid=stress
+    -o experimental-prometheus-rw
+    --no-thresholds
+  script:
+    configMap:
+      name: k6-stress-script
+      file: stress_100rps.js
+  runner:
+    image: kind-registry:5000/linea-verde/k6-loader:latest
+    imagePullPolicy: IfNotPresent
+    serviceAccountName: k6-runner
+    env:
+      - name: SEED
+        value: "42"
+      - name: K6_PROMETHEUS_RW_SERVER_URL
+        valueFrom:
+          configMapKeyRef:
+            name: k6-prom-config
+            key: K6_PROMETHEUS_RW_SERVER_URL
+      - name: K6_PROMETHEUS_RW_PUSH_INTERVAL
+        valueFrom:
+          configMapKeyRef:
+            name: k6-prom-config
+            key: K6_PROMETHEUS_RW_PUSH_INTERVAL
+      - name: KONG_URL
+        valueFrom:
+          configMapKeyRef:
+            name: k6-prom-config
+            key: KONG_URL
+    resources:
+      requests:
+        cpu: 800m
+        memory: 768Mi
+      limits:
+        cpu: 2000m
+        memory: 1536Mi
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 12345
+      seccompProfile:
+        type: RuntimeDefault

@@ -196,3 +196,17 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } } }]
+---
+# k6-operator (k6-operator-system) necesita alcanzar puerto 6565 de los runner pods
+# para enviar la señal de resume (PATCH /v1/status). Sin esta regla el TestRun
+# queda atascado en stage=created indefinidamente.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: carga-ingress-from-k6-operator, namespace: carga }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: k6-operator-system } }
+      ports: [{ protocol: TCP, port: 6565 }]

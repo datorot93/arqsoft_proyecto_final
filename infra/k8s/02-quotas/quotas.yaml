@@ -158,6 +158,8 @@ spec:
 # =================================================================
 # observabilidad — Prometheus + Grafana + Tempo + Loki + OTel
 # Es el namespace más demandante.
+# Multi-nodo (4 nodes): OTel Collector DaemonSet 4×(500m CPU, 512Mi)
+# = +2 CPU, +2Gi límite extra vs cluster de 1 nodo.
 # =================================================================
 ---
 apiVersion: v1
@@ -165,10 +167,10 @@ kind: ResourceQuota
 metadata: { name: quota, namespace: observabilidad }
 spec:
   hard:
-    requests.cpu: "3"
-    requests.memory: "6Gi"
-    limits.cpu: "6"
-    limits.memory: "10Gi"
+    requests.cpu: "5"
+    requests.memory: "8Gi"
+    limits.cpu: "12"
+    limits.memory: "16Gi"
     pods: "30"
     persistentvolumeclaims: "10"
 ---

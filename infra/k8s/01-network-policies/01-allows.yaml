@@ -73,6 +73,19 @@ spec:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: linea-verde } }
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
 ---
+# El operador CNPG (cnpg-system) necesita alcanzar el HTTP API del instance
+# manager (puerto 8000) para extraer el estado del cluster y marcar Ready=True.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: datos-ingress-from-cnpg, namespace: datos }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: cnpg-system } }
+      ports: [{ protocol: TCP, port: 8000 }]
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata: { name: datos-egress-observabilidad, namespace: datos }

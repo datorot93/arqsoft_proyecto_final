@@ -125,6 +125,15 @@ f6-report: ## Abre el último report.html en navegador (xdg-open / wsl-open)
 test-f6: ## Ejecuta los 10 tests del gate F6 (inspección de la última ronda)
 	@bash tests/f6/run-gates.sh
 
+stress-run: ## Prueba de capacidad: ramp 10→100 r/s en 10 min. Variable: SEED=42
+	@python3 runs/run_stress.py --seed $${SEED:-42}
+
+stress-report: ## (Re)genera el HTML del último stress test sin re-ejecutar la prueba
+	@latest=$$(ls -dt runs/results/stress-* 2>/dev/null | head -1); \
+	if [ -z "$$latest" ]; then echo "sin resultados stress"; exit 1; fi; \
+	python3 report/build_stress_report.py --stress-dir "$$latest"; \
+	echo "→ $$latest/stress_report.html"
+
 ##@ F7 — Reproducibilidad (CI/CD + IaC OCI)
 
 experiment: ## Levanta stack completo y corre 1 ronda smoke (idempotente si cluster ya existe)

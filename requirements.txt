@@ -1,0 +1,4 @@
+# Dependencias Python del experimento (runs/ + report/)
+requests>=2.31.0
+jinja2>=3.1.0
+matplotlib>=3.7.0

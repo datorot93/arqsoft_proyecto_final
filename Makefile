@@ -103,6 +103,9 @@ test-f5: ## Ejecuta los 12 tests del gate F5
 f6-round: ## Lanza UNA ronda (warmup+baseline+peak). Variables: SEED=42 MODE=smoke|scaled|full
 	@python3 runs/run_round.py --seed $${SEED:-42} --$${MODE:-scaled}
 
+smoke-run: ## Atajo: ronda smoke (30s warmup + 2min baseline + 3min peak a 100 r/s). Variable: SEED=42
+	@python3 runs/run_round.py --seed $${SEED:-42} --smoke
+
 f6-rounds: ## Lanza N=5 rondas con seeds 42..46 (mode=$${MODE:-scaled})
 	@for s in 42 43 44 45 46; do \
 		echo "=== ronda seed=$$s ==="; \
@@ -124,6 +127,15 @@ f6-report: ## Abre el último report.html en navegador (xdg-open / wsl-open)
 
 test-f6: ## Ejecuta los 10 tests del gate F6 (inspección de la última ronda)
 	@bash tests/f6/run-gates.sh
+
+stress-run: ## Prueba de capacidad: ramp 10→100 r/s en 10 min. Variable: SEED=42
+	@python3 runs/run_stress.py --seed $${SEED:-42}
+
+stress-report: ## (Re)genera el HTML del último stress test sin re-ejecutar la prueba
+	@latest=$$(ls -dt runs/results/stress-* 2>/dev/null | head -1); \
+	if [ -z "$$latest" ]; then echo "sin resultados stress"; exit 1; fi; \
+	python3 report/build_stress_report.py --stress-dir "$$latest"; \
+	echo "→ $$latest/stress_report.html"
 
 ##@ F7 — Reproducibilidad (CI/CD + IaC OCI)
 

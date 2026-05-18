@@ -157,6 +157,11 @@ grafana:
       folderAnnotation: grafana_folder
       provider:
         foldersFromFilesStructure: true
+    datasources:
+      # El chart inyecta por defecto un Prometheus datasource (isDefault=true) vía sidecar.
+      # Como ya lo definimos en grafana.datasources.datasources.yaml (con exemplars de Tempo),
+      # deshabilitamos el default automático para evitar el error "Only one datasource per default".
+      defaultDatasourceEnabled: false
 
   # Datasource de Prometheus ya viene configurado por defecto en kube-prometheus-stack.
   # Se personaliza para enriquecer la config con Tempo exemplars.

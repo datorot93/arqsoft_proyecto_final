@@ -18,6 +18,18 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load"
 source "$ROOT_DIR/versions.env"
 
+# Detectar node: primero en PATH, luego en nvm (no sourced en bash -c no interactivo)
+if ! command -v node >/dev/null 2>&1; then
+  NVM_NODE=$(ls "$HOME/.nvm/versions/node"/*/bin/node 2>/dev/null | sort -V | tail -1)
+  if [ -n "$NVM_NODE" ]; then
+    export PATH="$(dirname "$NVM_NODE"):$PATH"
+  fi
+fi
+NODE_BIN=$(command -v node 2>/dev/null || echo "node")
+# Sustituir "node " por la ruta absoluta en los tests que usan run_node_test
+# (los comandos en run_node_test se ejecutan con bash -c en subshell sin .bashrc)
+export PATH="$(dirname "$NODE_BIN"):$PATH"
+
 PROM_URL="${PROM_URL:-http://kube-prometheus-stack-prometheus.observabilidad.svc.cluster.local:9090}"
 KONG_URL_INT="${KONG_URL:-http://kong-kong-proxy.borde.svc.cluster.local}"
 

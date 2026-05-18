@@ -1,30 +1,30 @@
-# TestRun CR para el escenario `peak_asr2` (20 min · NHPP+MMPP+Dirichlet).
-# Es el escenario CRÍTICO del experimento.
+# TestRun CR para el escenario `stress_100rps` (10 min · ramp hasta 100 r/s).
+# Objetivo: superar el techo de 36 r/s del peak ASR-2 y explorar capacidad.
 #
-# ASR-2: onset a 100 r/s (6.000 CDT/min). preAllocatedVUs=200/maxVUs=400
-# para soportar hasta 300 r/s en ráfagas MMPP (100 r/s × 3 bursty multiplier).
+# preAllocatedVUs=200 / maxVUs=400 para soportar 100 r/s con latencias >600 ms.
+# resources aumentados respecto al peak (más VUs = más CPU en el pod k6).
 
 ---
 apiVersion: k6.io/v1alpha1
 kind: TestRun
 metadata:
-  name: k6-peak
+  name: k6-stress
   namespace: carga
   labels:
     app.kubernetes.io/part-of: linea-verde-experimento
     componente: load-runner
-    fase: peak
+    fase: stress
 spec:
   parallelism: 1
   cleanup: post
   arguments: >-
-    --tag testid=peak
+    --tag testid=stress
     -o experimental-prometheus-rw
     --no-thresholds
   script:
     configMap:
-      name: k6-peak-script
-      file: peak_asr2.js
+      name: k6-stress-script
+      file: stress_100rps.js
   runner:
     image: kind-registry:5000/linea-verde/k6-loader:latest
     imagePullPolicy: IfNotPresent
@@ -47,10 +47,6 @@ spec:
           configMapKeyRef:
             name: k6-prom-config
             key: KONG_URL
-      - name: PEAK_VUS
-        value: "200"
-      - name: PEAK_MAX_VUS
-        value: "400"
     resources:
       requests:
         cpu: 800m

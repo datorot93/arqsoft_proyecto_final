@@ -2,48 +2,41 @@
 // Proceso de Poisson No-Homogéneo (NHPP) por tramos lineales.
 // Documento maestro: docs/experimento_asr.md §4.2.1.
 //
+// ASR-2: el sistema debe soportar 6.000 CDT/minuto = 100 r/s en el onset
+// del pico, sostenidos durante una ventana de 20 minutos.
+//
 // Tabla canónica del pico ASR-2 (20 min = 1200 s):
 //
-//   t (min)  |  λ(t)  (req/s)            |  Modo
-//   ---------+---------------------------+-------------------------
-//   0  – 2   |  12                        |  constante (onset abrupto)
-//   2  – 7   |  9 → 6  (lineal)           |  decaimiento
-//   7  – 15  |  5 → 3  (lineal)           |  régimen estable
-//   15 – 20  |  3 → 2  (lineal)           |  cola
+//   t (min)  |  λ(t)  (req/s)             |  Modo
+//   ---------+----------------------------+-------------------------
+//   0  – 2   |  100                        |  constante (onset abrupto, 6000 CDT/min)
+//   2  – 7   |  75 → 50  (lineal)          |  decaimiento
+//   7  – 15  |  42 → 25  (lineal)          |  régimen estable
+//   15 – 20  |  25 → 17  (lineal)          |  cola
 //
-// Volumen objetivo:  ∫₀¹²⁰⁰ λ(t) dt  ≈  6.000 ± 200  (criterio ASR-2).
+// Volumen objetivo:  ∫₀¹²⁰⁰ λ(t) dt  ≈  53.130 CDT  (criterio ASR-2).
 //
 // Cálculo manual:
-//   F1 [0,120]:    12 * 120                                 = 1440
-//   F2 [120,420]:  trapezoidal (9+6)/2 * 300                = 2250
-//   F3 [420,900]:  (5+3)/2 * 480                            = 1920
-//   F4 [900,1200]: (3+2)/2 * 300                            = 750
-//   Total                                                   = 6360
+//   P1 [0,120]:    100 * 120                                = 12.000
+//   P2 [120,420]:  trapezoidal (75+50)/2 * 300              = 18.750
+//   P3 [420,900]:  (42+25)/2 * 480                          = 16.080
+//   P4 [900,1200]: (25+17)/2 * 300                          =  6.300
+//   Total                                                   = 53.130
 //
-// 6360 ∈ [5800, 6200] ?  → 6360 está fuera del rango por ARRIBA.
-// Esto es CONSISTENTE con el documento maestro §4.2.1 que dice "≈ 6.080 ± 200".
-// El criterio del spec F5.T-2 dice "[5800, 6200]". Probablemente una errata
-// menor del spec; el documento maestro es fuente normativa ("≈ 6.080 ± 200").
-// Nota: VERIFICACION.md documenta este matiz.
-//
-// El cálculo nuestro produce 6360 (algo arriba del nominal 6.080 maestro,
-// porque las rampas se calculan como trapezoides y los valores bordes coinciden).
-// Para encajar con [5800, 6200] del spec, los valores de los tramos se mantienen
-// EXACTAMENTE como dice el documento maestro § 4.2.1 (autoritativo) y se aclara
-// en VERIFICACION.md. El test integrate_lambda.js relaja el rango a [5800, 6500]
-// citando la línea "≈ 6.080 ± 200" del maestro como fuente de verdad.
+// El test integrate_lambda.js verifica que el total esté en [50.000, 55.000].
 
 export const PHASES = Object.freeze([
   // [tStart_s, tEnd_s, lambdaStart, lambdaEnd, label]
-  [0, 120, 12, 12, "P1-onset"],
-  [120, 420, 9, 6, "P2-decay"],
-  [420, 900, 5, 3, "P3-steady"],
-  [900, 1200, 3, 2, "P4-tail"],
+  [0, 120, 100, 100, "P1-onset"],
+  [120, 420, 75, 50, "P2-decay"],
+  [420, 900, 42, 25, "P3-steady"],
+  [900, 1200, 25, 17, "P4-tail"],
 ]);
 
 export const PEAK_DURATION_S = 1200;
-// Lambda máximo del tramo P1: usado como "envelope" para thinning del NHPP.
-export const PEAK_LAMBDA_MAX = 12;
+// Lambda máximo del tramo P1 (onset del pico = 100 r/s = 6.000 CDT/min).
+// Usado como envelope para thinning del NHPP y cálculo de VUs necesarios.
+export const PEAK_LAMBDA_MAX = 100;
 
 // λ(t) — interpolación lineal por tramos.  Devuelve 0 fuera de [0, 1200].
 export function lambdaAt(tSeconds) {

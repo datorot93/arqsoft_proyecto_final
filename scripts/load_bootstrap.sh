@@ -70,9 +70,10 @@ bundle_script() {
 }
 
 mkdir -p "$ROOT_DIR/load/dist"
-bundle_script "load/scenarios/warmup.js"        "load/dist/warmup.bundled.js"
-bundle_script "load/scenarios/baseline_asr1.js" "load/dist/baseline_asr1.bundled.js"
-bundle_script "load/scenarios/peak_asr2.js"     "load/dist/peak_asr2.bundled.js"
+bundle_script "load/scenarios/warmup.js"          "load/dist/warmup.bundled.js"
+bundle_script "load/scenarios/baseline_asr1.js"  "load/dist/baseline_asr1.bundled.js"
+bundle_script "load/scenarios/peak_asr2.js"      "load/dist/peak_asr2.bundled.js"
+bundle_script "load/scenarios/stress_100rps.js"  "load/dist/stress_100rps.bundled.js"
 
 kubectl create configmap k6-warmup-script -n carga \
   --from-file=warmup.js="$ROOT_DIR/load/dist/warmup.bundled.js" \
@@ -83,8 +84,11 @@ kubectl create configmap k6-baseline-script -n carga \
 kubectl create configmap k6-peak-script -n carga \
   --from-file=peak_asr2.js="$ROOT_DIR/load/dist/peak_asr2.bundled.js" \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap k6-stress-script -n carga \
+  --from-file=stress_100rps.js="$ROOT_DIR/load/dist/stress_100rps.bundled.js" \
+  --dry-run=client -o yaml | kubectl apply -f -
 
-ok "ConfigMaps de scripts creados"
+ok "ConfigMaps de scripts creados (warmup, baseline, peak, stress)"
 
 # ---------- 4. Bootstrap del namespace carga ----------
 log "Aplicando ServiceAccount + ConfigMap de Prometheus..."

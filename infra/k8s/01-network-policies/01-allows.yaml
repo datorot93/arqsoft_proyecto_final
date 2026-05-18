@@ -73,6 +73,19 @@ spec:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: linea-verde } }
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } }
 ---
+# El operador CNPG (cnpg-system) necesita alcanzar el HTTP API del instance
+# manager (puerto 8000) para extraer el estado del cluster y marcar Ready=True.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: datos-ingress-from-cnpg, namespace: datos }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: cnpg-system } }
+      ports: [{ protocol: TCP, port: 8000 }]
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata: { name: datos-egress-observabilidad, namespace: datos }
@@ -183,3 +196,17 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - from: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observabilidad } } }]
+---
+# k6-operator (k6-operator-system) necesita alcanzar puerto 6565 de los runner pods
+# para enviar la señal de resume (PATCH /v1/status). Sin esta regla el TestRun
+# queda atascado en stage=created indefinidamente.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: carga-ingress-from-k6-operator, namespace: carga }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: k6-operator-system } }
+      ports: [{ protocol: TCP, port: 6565 }]

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stress Test — {{ run_id }}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      line-height: 1.6;
+    }
+    a { color: #63b3ed; }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #1a1f2e 0%, #16213e 100%);
+      border-bottom: 2px solid #2d3748;
+      padding: 2rem;
+    }
+    .header h1 { font-size: 1.8rem; font-weight: 700; color: #f6e05e; margin-bottom: 0.4rem; }
+    .header .meta { font-size: 0.85rem; color: #a0aec0; }
+    .header .meta span { margin-right: 1.5rem; }
+
+    /* Summary cards */
+    .summary {
+      padding: 2rem;
+      border-bottom: 1px solid #2d3748;
+    }
+    .summary h2 { font-size: 1.1rem; font-weight: 600; color: #90cdf4; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: #1a202c;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 1.2rem;
+      text-align: center;
+    }
+    .card .value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #68d391;
+      line-height: 1.2;
+    }
+    .card .label {
+      font-size: 0.78rem;
+      color: #718096;
+      margin-top: 0.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .card.warn .value { color: #f6ad55; }
+    .card.err .value { color: #fc8181; }
+
+    /* Scenario description */
+    .scenario-desc {
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid #2d3748;
+      background: #1a202c;
+    }
+    .scenario-desc h2 { font-size: 1rem; color: #90cdf4; margin-bottom: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .scenario-desc table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    .scenario-desc td { padding: 0.35rem 0.75rem; border-bottom: 1px solid #2d3748; }
+    .scenario-desc td:first-child { color: #a0aec0; width: 30%; }
+    .scenario-desc td:last-child { color: #e2e8f0; font-weight: 500; }
+
+    /* Charts */
+    .charts { padding: 2rem; }
+    .chart-section { margin-bottom: 2.5rem; }
+    .chart-section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #90cdf4;
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-left: 3px solid #63b3ed;
+      padding-left: 0.75rem;
+    }
+    .chart-section .chart-wrap {
+      background: #1a202c;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+    .chart-wrap svg { max-width: 100%; height: auto; background: transparent; }
+
+    /* Phase annotations legend */
+    .phase-legend {
+      display: flex;
+      gap: 1.5rem;
+      font-size: 0.78rem;
+      color: #718096;
+      margin-top: 0.5rem;
+    }
+    .phase-legend .phase { display: flex; align-items: center; gap: 0.4rem; }
+    .phase-legend .dot { width: 10px; height: 2px; background: currentColor; }
+    .phase-legend .ramp-up { color: #a0aec0; }
+    .phase-legend .sustained { color: #68d391; }
+    .phase-legend .ramp-down { color: #fc8181; }
+
+    /* Footer */
+    .footer {
+      padding: 1.5rem 2rem;
+      font-size: 0.78rem;
+      color: #4a5568;
+      border-top: 1px solid #2d3748;
+      text-align: center;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .cards { grid-template-columns: 1fr 1fr; }
+      .header h1 { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Prueba de Capacidad — stress_100rps</h1>
+    <div class="meta">
+      <span><strong>Run ID:</strong> {{ run_id }}</span>
+      <span><strong>Seed:</strong> {{ seed }}</span>
+      <span><strong>Duración:</strong> {{ duration_s }}</span>
+      <span><strong>Generado:</strong> {{ generated_at }}</span>
+    </div>
+  </div>
+
+  <div class="summary">
+    <h2>Métricas clave</h2>
+    <div class="cards">
+      <div class="card">
+        <div class="value">{{ peak_rps }}</div>
+        <div class="label">Peak req/s (k6)</div>
+      </div>
+      <div class="card">
+        <div class="value">{{ avg_rps }}</div>
+        <div class="label">Promedio req/s</div>
+      </div>
+      <div class="card">
+        <div class="value">{{ p95_ms }}</div>
+        <div class="label">P95 (pico sostenido)</div>
+      </div>
+      <div class="card">
+        <div class="value">{{ total_requests }}</div>
+        <div class="label">Requests totales</div>
+      </div>
+      <div class="card warn">
+        <div class="value">{{ error_count }}</div>
+        <div class="label">Errores</div>
+      </div>
+      <div class="card warn">
+        <div class="value">{{ error_rate }}</div>
+        <div class="label">Tasa de error</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scenario-desc">
+    <h2>Perfil del escenario</h2>
+    <table>
+      <tr><td>Executor</td><td>ramping-arrival-rate (Poisson — sin coordinated omission)</td></tr>
+      <tr><td>Fase 1 — Ramp-up</td><td>0–3 min: 10 → 100 r/s</td></tr>
+      <tr><td>Fase 2 — Sostenido</td><td>3–8 min: 100 r/s (pico de exploración de capacidad)</td></tr>
+      <tr><td>Fase 3 — Ramp-down</td><td>8–10 min: 100 → 20 r/s</td></tr>
+      <tr><td>VUs</td><td>preAllocatedVUs=200 · maxVUs=400</td></tr>
+      <tr><td>Latency profile</td><td>Pareto tail (X-Stub-Latency-Profile: pareto)</td></tr>
+      <tr><td>Error rate nominal</td><td>0.5% (X-Stub-Error-Rate: 0.005)</td></tr>
+      <tr><td>Distribución país</td><td>Dirichlet α=(3,1,1) → PE/MX/CO ≈ 60/20/20%</td></tr>
+    </table>
+  </div>
+
+  <div class="charts">
+
+    <div class="chart-section">
+      <h2>Perfil de carga (req/s observado)</h2>
+      <div class="chart-wrap">{{ plot_req_rate }}</div>
+      <div class="phase-legend">
+        <div class="phase ramp-up"><div class="dot"></div> Ramp-up: 0–180 s</div>
+        <div class="phase sustained"><div class="dot"></div> Sostenido 100 r/s: 180–480 s</div>
+        <div class="phase ramp-down"><div class="dot"></div> Ramp-down: 480–600 s</div>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <h2>Latencia P50 / P95 — client-side (k6)</h2>
+      <div class="chart-wrap">{{ plot_latency }}</div>
+    </div>
+
+    <div class="chart-section">
+      <h2>Latencia P50 / P95 — server-side (cdt_open_handler)</h2>
+      <div class="chart-wrap">{{ plot_server_latency }}</div>
+    </div>
+
+    <div class="chart-section">
+      <h2>Tasa de error acumulada</h2>
+      <div class="chart-wrap">{{ plot_error_rate }}</div>
+    </div>
+
+    <div class="chart-section">
+      <h2>VUs activos (concurrencia k6)</h2>
+      <div class="chart-wrap">{{ plot_vus }}</div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    Generado por <code>runs/run_stress.py</code> + <code>report/build_stress_report.py</code>
+    · Experimento ASR-1/ASR-2 — ARTI 4109 MATI Uniandes
+  </div>
+
+</body>
+</html>

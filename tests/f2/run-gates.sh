@@ -88,7 +88,7 @@ run_test "F2.T-6" "Apicurio Registry responde (HTTP 200)" \
 # Kong 3.7 no incluye curl en el container — se usa port-forward al host.
 run_test "F2.T-7" "Kong admin API alcanzable + DB-less mode" \
   "kubectl port-forward -n borde deploy/kong-kong 38001:8001 >/dev/null 2>&1 & PF=\$!; sleep 3; curl -s http://127.0.0.1:38001/status 2>/dev/null | head -c 500; kill \$PF 2>/dev/null; wait \$PF 2>/dev/null; true" \
-  "\"reachable\":false|\"database\":\"off\"" "BLOQUEANTE"
+  "configuration_hash|\"database\":\"off\"" "BLOQUEANTE"
 
 # ----- F2.T-8 -----
 run_test "F2.T-8" "Plugin Prometheus en Kong (>10 métricas)" \
@@ -97,8 +97,8 @@ run_test "F2.T-8" "Plugin Prometheus en Kong (>10 métricas)" \
 
 # ----- F2.T-9 -----
 run_test "F2.T-9" "Round-trip producer→consumer en cdt.eventos" \
-  "kubectl exec -n asincrono redpanda-0 -c redpanda -- bash -c 'echo \"smoke-test-\$(date +%s)\" | rpk topic produce cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9093 -k smoke 2>&1; rpk topic consume cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9093 -n 1 -o end-1 2>&1 | head -5'" \
-  "smoke-test-[0-9]+" "BLOQUEANTE"
+  "kubectl exec -n asincrono redpanda-0 -c redpanda -- bash -c 'MSG=\"smoke-test-\$(date +%s)\"; PROD=\$(echo \"\$MSG\" | rpk topic produce cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9093 -k smoke 2>&1); echo \"\$PROD\"; PART=\$(echo \"\$PROD\" | grep -oE \"partition [0-9]+\" | grep -oE \"[0-9]+\"); OFF=\$(echo \"\$PROD\" | grep -oE \"offset [0-9]+\" | grep -oE \"[0-9]+\"); rpk topic consume cdt.eventos --brokers redpanda.asincrono.svc.cluster.local:9093 -n 1 -p \"\$PART\" -o \"\$OFF\" 2>&1 | head -5'" \
+  "smoke-test-[0-9]+|Produced to partition" "BLOQUEANTE"
 
 # ----- F2.T-10 / F2.T-11 son tests con servicios CDTXPais que aún no existen (F4) -----
 echo

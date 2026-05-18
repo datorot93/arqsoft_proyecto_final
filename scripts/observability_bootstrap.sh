@@ -36,6 +36,7 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --namespace observabilidad \
   --version "$KUBE_PROMETHEUS_STACK_VERSION" \
   -f "$ROOT_DIR/infra/helm/kube-prometheus-stack/values.yaml" \
+  --no-hooks \
   --wait --timeout 8m
 ok "kube-prometheus-stack desplegado"
 

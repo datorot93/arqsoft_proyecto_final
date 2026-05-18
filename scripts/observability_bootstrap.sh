@@ -70,6 +70,16 @@ helm upgrade --install loki grafana/loki \
 ok "Loki desplegado"
 
 # ----- 4b. Promtail (chart separado) -----
+# OL9/multi-node kind: Promtail necesita inotify elevados o crashea con "too many open files".
+# El script intenta subirlos si tiene sudo; si no, el DaemonSet puede quedar en CrashLoop
+# hasta que el operador ejecute manualmente:
+#   sudo sysctl -w fs.inotify.max_user_instances=512
+#   sudo sysctl -w fs.inotify.max_user_watches=524288
+#   echo "fs.inotify.max_user_instances=512"  | sudo tee /etc/sysctl.d/99-inotify.conf
+#   echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.d/99-inotify.conf
+sudo sysctl -w fs.inotify.max_user_instances=512 2>/dev/null || true
+sudo sysctl -w fs.inotify.max_user_watches=524288 2>/dev/null || true
+
 say "Instalando Promtail (chart grafana/promtail)"
 helm upgrade --install promtail grafana/promtail \
   --namespace observabilidad \
@@ -77,8 +87,9 @@ helm upgrade --install promtail grafana/promtail \
   --set "config.clients[0].url=http://loki.observabilidad.svc.cluster.local:3100/loki/api/v1/push" \
   --set "serviceMonitor.enabled=true" \
   --set "serviceMonitor.labels.release=kube-prometheus-stack" \
-  --wait --timeout 3m
-ok "Promtail desplegado"
+  --wait --timeout 3m \
+  && ok "Promtail desplegado" \
+  || warn "Promtail no llegó a Ready en 3 min — puede requerir inotify elevados (ver comentario arriba). Continúo."
 
 # ----- 5. Manifiestos K8s de observabilidad -----
 say "Aplicando manifiestos de observabilidad"

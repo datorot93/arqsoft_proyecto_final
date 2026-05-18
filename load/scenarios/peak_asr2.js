@@ -43,8 +43,8 @@ const PEAK_DURATION_OVERRIDE_S = parseInt(__ENV.PEAK_DURATION || "0", 10);
 // VUs preallocated para pico: lambda_max * mmpp_max * margen
 //   12 r/s * 3 (bursty) * 5 (latency factor) = 180 VUs sería conservador.
 //   En kind 1-nodo apuntamos a 60 (≈ 1 segundo de queue máximo a P95 ~600ms).
-const PRE_VUS = parseInt(__ENV.PEAK_VUS || "60", 10);
-const MAX_VUS = parseInt(__ENV.PEAK_MAX_VUS || "120", 10);
+const PRE_VUS = parseInt(__ENV.PEAK_VUS || "120", 10);
+const MAX_VUS = parseInt(__ENV.PEAK_MAX_VUS || "240", 10);
 
 const cdtSuccess = new Counter("cdt_success_total");
 const cdtError = new Counter("cdt_error_total");

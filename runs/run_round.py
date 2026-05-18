@@ -58,7 +58,8 @@ DURATIONS = {
         "peak": 1200,
         "warmup_rate": 2,
         "baseline_target_rps": 0.2,  # 1 req cada 5s
-        "peak_volume_threshold": 6000,
+        # ASR-2: λ_max=100 r/s (onset). ∫₀¹²⁰⁰ λ(t) dt ≈ 53.130 CDT.
+        "peak_volume_threshold": 53000,
     },
     "scaled": {
         "warmup": 60,
@@ -66,20 +67,20 @@ DURATIONS = {
         "peak": 240,
         "warmup_rate": 2,
         "baseline_target_rps": 0.2,
-        # umbral proporcional 6000 * (240 / 1200) = 1200
-        "peak_volume_threshold": 1200,
+        # El NHPP comprimido en 240s muestrea la curva completa (6.67× scale).
+        # Volumen estimado: 8 etapas × λ_media ≈ 10.800 CDT (sin MMPP).
+        "peak_volume_threshold": 11000,
     },
     "smoke": {
         "warmup": 30,
         "baseline": 120,  # baseline 0.2 r/s — necesitamos ≥ 60s para promediar
-        "peak": 120,
+        "peak": 180,      # 3 min — cubre el onset (100 r/s) + inicio del decaimiento
         "warmup_rate": 2,
         "baseline_target_rps": 0.2,
-        # 6000 * (120/1200) = 600
-        "peak_volume_threshold": 600,
+        # NHPP comprimido en 180s: 6 etapas, λ_media ≈ 46 r/s → ~8.280 CDT (sin MMPP).
+        "peak_volume_threshold": 8500,
     },
     # F8 — smoke E2E corto: warmup 2 min + baseline 3 min + peak 5 min.
-    # Volumen objetivo: ~1500 CDT en 5 min (4× la tasa media del peak completo).
     # NOTA: No es el veredicto autoritativo — ese requiere mode=full con N=5.
     "e2e-short": {
         "warmup": 120,
@@ -87,8 +88,8 @@ DURATIONS = {
         "peak": 300,
         "warmup_rate": 2,
         "baseline_target_rps": 0.2,
-        # umbral proporcional 6000 * (300 / 1200) = 1500
-        "peak_volume_threshold": 1500,
+        # NHPP comprimido en 300s: 10 etapas, λ_media ≈ 43.8 r/s → ~13.140 CDT (sin MMPP).
+        "peak_volume_threshold": 13000,
     },
 }
 

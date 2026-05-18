@@ -40,11 +40,11 @@ const STAGE_GRANULARITY_S = parseInt(__ENV.PEAK_STAGE_S || "30", 10);
 // invariante a escala temporal cuando se preserva la fracción bursty del
 // MMPP (validación documentada en F5.T-3 y F6 VERIFICACION.md).
 const PEAK_DURATION_OVERRIDE_S = parseInt(__ENV.PEAK_DURATION || "0", 10);
-// VUs preallocated para pico: lambda_max * mmpp_max * margen
-//   12 r/s * 3 (bursty) * 5 (latency factor) = 180 VUs sería conservador.
-//   En kind 1-nodo apuntamos a 60 (≈ 1 segundo de queue máximo a P95 ~600ms).
-const PRE_VUS = parseInt(__ENV.PEAK_VUS || "120", 10);
-const MAX_VUS = parseInt(__ENV.PEAK_MAX_VUS || "240", 10);
+// VUs preallocated: lambda_max(100) * mmpp_max(3) * latency_factor(P95≈600ms→1s queue)
+//   100 r/s × 1s latencia media = 100 VUs mínimo; con margen ×2 = 200 prealloc.
+//   maxVUs=400 cubre ráfagas MMPP (100×3=300 r/s) con latencias degradadas.
+const PRE_VUS = parseInt(__ENV.PEAK_VUS || "200", 10);
+const MAX_VUS = parseInt(__ENV.PEAK_MAX_VUS || "400", 10);
 
 const cdtSuccess = new Counter("cdt_success_total");
 const cdtError = new Counter("cdt_error_total");

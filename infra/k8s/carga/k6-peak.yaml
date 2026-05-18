@@ -1,9 +1,8 @@
 # TestRun CR para el escenario `peak_asr2` (20 min · NHPP+MMPP+Dirichlet).
 # Es el escenario CRÍTICO del experimento.
 #
-# parallelism=1 — un solo pod genera la carga; con la cota de
-# preAllocatedVUs=60 / maxVUs=120 cabe en la quota de namespace `carga`
-# (limits.cpu=4, limits.memory=4Gi) sin saturar.
+# ASR-2: onset a 100 r/s (6.000 CDT/min). preAllocatedVUs=200/maxVUs=400
+# para soportar hasta 300 r/s en ráfagas MMPP (100 r/s × 3 bursty multiplier).
 
 ---
 apiVersion: k6.io/v1alpha1
@@ -49,16 +48,16 @@ spec:
             name: k6-prom-config
             key: KONG_URL
       - name: PEAK_VUS
-        value: "60"
+        value: "200"
       - name: PEAK_MAX_VUS
-        value: "120"
+        value: "400"
     resources:
       requests:
-        cpu: 500m
-        memory: 512Mi
+        cpu: 800m
+        memory: 768Mi
       limits:
-        cpu: 1500m
-        memory: 1Gi
+        cpu: 2000m
+        memory: 1536Mi
     securityContext:
       runAsNonRoot: true
       runAsUser: 12345

@@ -82,6 +82,8 @@ spec:
 
 # =================================================================
 # asincrono — Redpanda 3 brokers + Apicurio
+# Cada broker pide 1200m CPU + 2560Mi → 3 brokers = 3600m + 7680Mi
+# Se amplió para VM OCI con más recursos que el host local de 16GB.
 # =================================================================
 ---
 apiVersion: v1
@@ -89,10 +91,10 @@ kind: ResourceQuota
 metadata: { name: quota, namespace: asincrono }
 spec:
   hard:
-    requests.cpu: "3"
-    requests.memory: "6Gi"
-    limits.cpu: "6"
-    limits.memory: "10Gi"
+    requests.cpu: "5"
+    requests.memory: "10Gi"
+    limits.cpu: "10"
+    limits.memory: "16Gi"
     pods: "15"
     persistentvolumeclaims: "5"
 ---
